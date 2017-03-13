@@ -87,3 +87,11 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# Pycharm
+.idea
+
+# Project sepecic
+corpora/*.xml
+corpora/*.pkl
+
