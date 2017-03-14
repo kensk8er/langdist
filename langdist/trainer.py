@@ -14,6 +14,7 @@ _CORPUS_DIR = os.path.join(PACKAGE_ROOT, os.path.pardir, 'corpora')
 
 
 def main():
+    # TODO: develop CLI and log configuration of each run
     with open(os.path.join(_CORPUS_DIR, 'en.pkl'), 'rb') as corpus_file:
         paragraphs = pickle.load(corpus_file)
 
