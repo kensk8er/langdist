@@ -7,6 +7,7 @@ from copy import deepcopy
 import tensorflow as tf
 import numpy as np
 from tensorflow.contrib.rnn import LSTMCell
+from tensorflow.contrib.rnn import MultiRNNCell
 
 from langdist.batch import BatchGenerator
 from langdist.encoder import CharEncoder
@@ -14,17 +15,19 @@ from langdist.util import get_logger
 
 __author__ = 'kensk8er1017@gmail.com'
 
-_LOGGER = get_logger(__name__)
+_LOGGER = get_logger(__name__, write_file=True)
 
 
 class CharLSTM(object):
     """Character-based language modeling using LSTM."""
     _padding_id = 0  # TODO: 0 is used for actual character as well, which is a bit confusing...
 
-    def __init__(self, embedding_size=32, rnn_size=32, hidden_size=32, learning_rate=0.001):
+    def __init__(self, embedding_size=128, rnn_size=128, hidden_size=128, num_rnn_layers=1,
+                 learning_rate=0.01):
         self._embedding_size = embedding_size
         self._rnn_size = rnn_size
         self._hidden_size = hidden_size
+        self._num_rnn_layers = num_rnn_layers
         self._learning_rate = learning_rate
         self._nodes = None
         self._graph = None
@@ -96,21 +99,32 @@ class CharLSTM(object):
 
             with tf.name_scope('rnn_layer') as name_scope:
                 rnn_cell = LSTMCell(num_units=self._rnn_size)
+                rnn_cell = MultiRNNCell([rnn_cell] * self._num_rnn_layers)
                 rnn_outputs, states = tf.nn.dynamic_rnn(
                     rnn_cell, embedded, dtype=tf.float32, sequence_length=nodes['seq_lens'])
 
-            with tf.variable_scope('softmax'):
-                nodes['W'] = tf.Variable(
-                    tf.random_normal([self._rnn_size, self._vocab_size]), name='weight')
-                nodes['b'] = tf.Variable(tf.random_normal([self._vocab_size]), name='bias')
-
-                # reshape rnn_outputs and y so we can get the logits in a single matmul
+                # reshape rnn_outputs so we can compute activations for all the time steps at once
                 rnn_outputs = tf.reshape(rnn_outputs, [-1, self._rnn_size])
+
+            with tf.name_scope('fully_connected_layer') as name_scope:
+                nodes['W_f'] = tf.Variable(
+                    tf.random_normal([self._rnn_size, self._hidden_size]), name='weight')
+                nodes['b_f'] = tf.Variable(tf.random_normal([self._hidden_size]), name='bias')
+
+                fc_outputs = tf.nn.relu(tf.matmul(rnn_outputs, nodes['W_f']) + nodes['b_f'])
+
+            with tf.variable_scope('softmax_layer'):
+                nodes['W_s'] = tf.Variable(
+                    tf.random_normal([self._hidden_size, self._vocab_size]), name='weight')
+                nodes['b_s'] = tf.Variable(tf.random_normal([self._vocab_size]), name='bias')
+
+                # reshape y so we can get the logits in a single matmul
                 Y_reshaped = tf.reshape(nodes['Y'], [-1])
-                logits = tf.matmul(rnn_outputs, nodes['W']) + nodes['b']
+                logits = tf.matmul(fc_outputs, nodes['W_s']) + nodes['b_s']
+
                 nodes['loss'] = tf.reduce_mean(
-                    tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits,
-                                                                   labels=Y_reshaped))
+                    tf.nn.sparse_softmax_cross_entropy_with_logits(
+                        logits=logits, labels=Y_reshaped))
                 nodes['optimizer'] = tf.train.AdamOptimizer(self._learning_rate).minimize(
                     nodes['loss'])
 
