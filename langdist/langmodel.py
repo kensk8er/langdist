@@ -6,6 +6,7 @@ from copy import deepcopy
 
 import tensorflow as tf
 import numpy as np
+from tensorflow.contrib.rnn import DropoutWrapper
 from tensorflow.contrib.rnn import LSTMCell
 from tensorflow.contrib.rnn import MultiRNNCell
 
@@ -22,17 +23,16 @@ class CharLSTM(object):
     """Character-based language modeling using LSTM."""
     _padding_id = 0  # TODO: 0 is used for actual character as well, which is a bit confusing...
 
-    def __init__(self, embedding_size=128, rnn_size=128, hidden_size=128, num_rnn_layers=1,
-                 learning_rate=0.01):
+    def __init__(self, embedding_size=128, rnn_size=256, num_rnn_layers=2, learning_rate=0.002):
         self._embedding_size = embedding_size
         self._rnn_size = rnn_size
-        self._hidden_size = hidden_size
         self._num_rnn_layers = num_rnn_layers
         self._learning_rate = learning_rate
         self._nodes = None
         self._graph = None
         self._vocab_size = None
         self._encoder = CharEncoder()
+        self._num_params = None
 
     def train(self, paragraphs, batch_size=64, patience=30000, max_iteration=1000000,
               stat_interval=100):
@@ -63,7 +63,7 @@ class CharLSTM(object):
                 _, loss = session.run(
                     [nodes['optimizer'], nodes['loss']],
                     feed_dict={nodes['X']: X_batch, nodes['Y']: Y_batch,
-                               nodes['seq_lens']: seq_lens})
+                               nodes['seq_lens']: seq_lens, nodes['dropout_prob']: 0.5})
                 losses.append(loss)
 
                 if batch_id > 0 and batch_id % stat_interval == 0:
@@ -81,6 +81,18 @@ class CharLSTM(object):
 
     def _build_graph(self):
         """Build computational graph."""
+
+        def get_num_params():
+            """Count the number of trainable parameters."""
+            num_params = 0
+            for variable in tf.trainable_variables():
+                shape = variable.get_shape()
+                var_num_params = 1
+                for dimension in shape:
+                    var_num_params *= dimension.value
+                num_params += var_num_params
+            return num_params
+
         graph = tf.Graph()
         nodes = dict()
 
@@ -99,6 +111,7 @@ class CharLSTM(object):
 
             with tf.name_scope('rnn_layer') as name_scope:
                 rnn_cell = LSTMCell(num_units=self._rnn_size)
+                rnn_cell = DropoutWrapper(rnn_cell, input_keep_prob=nodes['dropout_prob'])
                 rnn_cell = MultiRNNCell([rnn_cell] * self._num_rnn_layers)
                 rnn_outputs, states = tf.nn.dynamic_rnn(
                     rnn_cell, embedded, dtype=tf.float32, sequence_length=nodes['seq_lens'])
@@ -106,30 +119,29 @@ class CharLSTM(object):
                 # reshape rnn_outputs so we can compute activations for all the time steps at once
                 rnn_outputs = tf.reshape(rnn_outputs, [-1, self._rnn_size])
 
-            with tf.name_scope('fully_connected_layer') as name_scope:
-                nodes['W_f'] = tf.Variable(
-                    tf.random_normal([self._rnn_size, self._hidden_size]), name='weight')
-                nodes['b_f'] = tf.Variable(tf.random_normal([self._hidden_size]), name='bias')
-
-                fc_outputs = tf.nn.relu(tf.matmul(rnn_outputs, nodes['W_f']) + nodes['b_f'])
-
             with tf.variable_scope('softmax_layer'):
                 nodes['W_s'] = tf.Variable(
-                    tf.random_normal([self._hidden_size, self._vocab_size]), name='weight')
+                    tf.random_normal([self._rnn_size, self._vocab_size]), name='weight')
                 nodes['b_s'] = tf.Variable(tf.random_normal([self._vocab_size]), name='bias')
 
                 # reshape y so we can get the logits in a single matmul
                 Y_reshaped = tf.reshape(nodes['Y'], [-1])
-                logits = tf.matmul(fc_outputs, nodes['W_s']) + nodes['b_s']
+                logits = tf.matmul(rnn_outputs, nodes['W_s']) + nodes['b_s']
 
+            with tf.variable_scope('loss'):
+                # TODO: need to mask the loss (many entries are padding)
                 nodes['loss'] = tf.reduce_mean(
                     tf.nn.sparse_softmax_cross_entropy_with_logits(
                         logits=logits, labels=Y_reshaped))
                 nodes['optimizer'] = tf.train.AdamOptimizer(self._learning_rate).minimize(
                     nodes['loss'])
 
-            # Initializing the variables
+            # initialize the variables
             nodes['init'] = tf.global_variables_initializer()
+
+            # count the number of parameters
+            self._num_params = get_num_params()
+            _LOGGER.info('Total number of parameters = {:,}'.format(self._num_params))
 
         self._graph = graph
         self._nodes = nodes
