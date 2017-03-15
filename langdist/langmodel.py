@@ -62,8 +62,7 @@ class CharLSTM(object):
                 _, loss = session.run(
                     [nodes['optimizer'], nodes['loss']],
                     feed_dict={nodes['X']: X_batch, nodes['Y']: Y_batch,
-                               nodes['seq_lens']: seq_lens, nodes['dropout_prob']: 0.5,
-                               nodes['batch_size']: batch_size})
+                               nodes['seq_lens']: seq_lens, nodes['dropout_prob']: 0.5})
                 losses.append(loss)
 
                 if batch_id > 0 and batch_id % stat_interval == 0:
@@ -102,7 +101,6 @@ class CharLSTM(object):
                 nodes['Y'] = tf.placeholder(tf.int32, [None, None], name='Y')
                 nodes['seq_lens'] = tf.placeholder(tf.int32, [None], name='seq_lens')
                 nodes['dropout_prob'] = tf.placeholder(tf.float32, shape=[], name='dropout_prob')
-                nodes['batch_size'] = tf.placeholder(tf.int32, shape=[], name='batch_size')
 
             with tf.name_scope('embedding_layer') as name_scope:
                 nodes['embeddings'] = tf.Variable(
@@ -129,8 +127,10 @@ class CharLSTM(object):
             with tf.variable_scope('loss'):
                 # reshape the logits back to batch_size * seq_lens such that we can compute mean
                 # loss after masking padding inputs easily by using sequence_loss
-                max_seq_len = tf.reduce_max(nodes['seq_lens'])
-                logits = tf.reshape(logits, [nodes['batch_size'], max_seq_len, -1])
+                X_shape = tf.shape(nodes['X'])
+                batch_size = X_shape[0]
+                max_seq_len = X_shape[1]
+                logits = tf.reshape(logits, [batch_size, max_seq_len, -1])
                 weights = tf.cast(tf.sequence_mask(nodes['seq_lens'], max_seq_len), tf.float32)
                 nodes['loss'] = sequence_loss(logits=logits, targets=nodes['Y'], weights=weights)
                 nodes['optimizer'] = tf.train.AdamOptimizer(self._learning_rate).minimize(
