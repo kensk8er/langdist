@@ -10,16 +10,16 @@ __author__ = 'kensk8er1017@gmail.com'
 class CharEncoder(object):
     """Encode characters into character IDs."""
 
-    end_symbol = '\n'
+    paragraph_border = '\n'
 
     def __init__(self):
         self._label_encoder = LabelEncoder()
-        self.end_symbol_id = None
+        self.paragraph_border_id = None
 
     def fit(self, paragraphs):
-        paragraphs[0] += self.end_symbol
+        paragraphs[0] += self.paragraph_border
         self._label_encoder.fit(list(''.join(paragraphs)))
-        self.end_symbol_id = self._label_encoder.transform([self.end_symbol])[0]
+        self.paragraph_border_id = self._label_encoder.transform([self.paragraph_border])[0]
 
     def encode(self, paragraphs):
         encoded_paragraphs = list()

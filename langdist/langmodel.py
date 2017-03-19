@@ -57,7 +57,7 @@ class CharLSTM(object):
             X, random_state=self._random_state, test_size=valid_size)
 
         X_valid, seq_lens_valid = self._add_padding(X_valid)
-        Y_valid = self._create_Y(X_valid)
+        X_valid, Y_valid = self._create_Y(X_valid)
 
         self._build_graph()
         nodes = self._nodes
@@ -82,7 +82,7 @@ class CharLSTM(object):
                     break
 
                 X_batch, seq_lens = self._add_padding(X_batch)
-                Y_batch = self._create_Y(X_batch)
+                X_batch, Y_batch = self._create_Y(X_batch)
 
                 # Predict labels and update the parameters
                 _, loss = session.run(
@@ -156,7 +156,7 @@ class CharLSTM(object):
         nodes = dict()
 
         with graph.as_default():
-            with tf.name_scope('inputs') as name_scope:
+            with tf.name_scope('inputs'):
                 nodes['X'] = tf.placeholder(tf.int32, [None, None], name='X')
                 nodes['Y'] = tf.placeholder(tf.int32, [None, None], name='Y')
                 nodes['seq_lens'] = tf.placeholder(tf.int32, [None], name='seq_lens')
@@ -166,19 +166,25 @@ class CharLSTM(object):
                 rnn_dropout = tf.where(
                     nodes['is_train'], tf.constant(self._rnn_dropout), tf.constant(1.0))
 
-            with tf.name_scope('embedding_layer') as name_scope:
+            # get the shape of the input
+            X_shape = tf.shape(nodes['X'])
+            batch_size = X_shape[0]
+            max_seq_len = X_shape[1]
+
+            with tf.name_scope('embedding_layer'):
                 nodes['embeddings'] = tf.Variable(
                     tf.random_uniform([self._vocab_size, self._embedding_size], -1.0, 1.0),
                     trainable=True, name='embeddings')
                 embedded = tf.nn.embedding_lookup(nodes['embeddings'], nodes['X'])
                 embedded = tf.nn.dropout(embedded, input_dropout, name='input_dropout')
 
-            with tf.name_scope('rnn_layer') as name_scope:
+            with tf.name_scope('rnn_layer'):
                 rnn_cell = LSTMCell(num_units=self._rnn_size)
                 rnn_cell = DropoutWrapper(rnn_cell, output_keep_prob=rnn_dropout)
                 rnn_cell = MultiRNNCell([rnn_cell] * self._num_rnn_layers)
+                nodes['initial_state'] = tf.Variable(rnn_cell.zero_states(batch_size, tf.float32))
                 rnn_outputs, states = tf.nn.dynamic_rnn(
-                    rnn_cell, embedded, dtype=tf.float32, sequence_length=nodes['seq_lens'])
+                    rnn_cell, embedded, nodes['seq_lens'], nodes['initial_state'], tf.float32)
 
                 # reshape rnn_outputs so we can compute activations for all the time steps at once
                 rnn_outputs = tf.reshape(rnn_outputs, [-1, self._rnn_size])
@@ -237,15 +243,20 @@ class CharLSTM(object):
         return X, seq_lens
 
     def _create_Y(self, X):
-        """Create Y (correct character sequences) based on X (input character sequences)."""
+        """
+        Create Y (correct character sequences) based on X (input character sequences). Also prepend
+        the paragraph border character to X (in order to learn the beginning of a paragraph.
+        """
         Y = list()
         for x in X:
-            y = x[1:]
-            y.append(self._encoder.end_symbol_id)
+            y = x
+            y.append(self._encoder.paragraph_border_id)
             Y.append(y)
-        return Y
+            x.insert(0, self._encoder.paragraph_border_id)
+        return X, Y
 
     def _encode_chars(self, paragraphs, fit):
+        """Convert paragraphs of characters into encoded characters (character IDs)."""
         if fit:
             encoded_paragraphs = self._encoder.fit_encode(paragraphs)
             self._vocab_size = self._encoder.vocab_size
