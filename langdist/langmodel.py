@@ -320,7 +320,7 @@ class CharLSTM(object):
         nodes = self._nodes
         initial_states = np.zeros((self._num_rnn_layers, 2, sample_num, self._rnn_size))
 
-        while paragraph_ids and len(max(paragraphs, key=len)) < max_char_len:
+        while len(max(paragraphs, key=len)) < max_char_len:
             Y_prob, states = session.run(
                 [nodes['Y_prob'], nodes['states']],
                 feed_dict={nodes['X']: X, nodes['seq_lens']: seq_lens, nodes['is_train']: False,
@@ -337,6 +337,10 @@ class CharLSTM(object):
 
                 paragraphs[paragraph_id].append(sampled_char_id)
                 next_sample_ids.append(sample_id)
+
+            # finish the loop when there's no more paragraph to sample
+            if not next_sample_ids:
+                break
 
             # prepare next input
             # don't process paragraphs that already finish sampling
