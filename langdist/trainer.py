@@ -4,6 +4,7 @@ Write training routine here.
 """
 import os
 import pickle
+import shutil
 
 from langdist import PACKAGE_ROOT
 from langdist.langmodel import CharLSTM
@@ -21,11 +22,15 @@ def main():
     # TODO: develop CLI and log configuration of each run
     locale = 'zh'
     _LOGGER.info('Locale={}'.format(locale))
+
     with open(os.path.join(_CORPUS_DIR, '{}.pkl'.format(locale)), 'rb') as corpus_file:
         paragraphs = pickle.load(corpus_file)
 
     char_lstm = CharLSTM()
+
     model_path = os.path.join(_MODEL_DIR, locale)
+    if os.path.exists(model_path):
+        shutil.rmtree(model_path)
     char_lstm.train(paragraphs, model_path=model_path, patience=1000000)
 
 if __name__ == '__main__':
