@@ -10,6 +10,7 @@ import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from tensorflow.contrib.rnn import DropoutWrapper, LSTMCell, MultiRNNCell
+from tensorflow.contrib.rnn import LSTMStateTuple
 from tensorflow.contrib.seq2seq import sequence_loss
 
 from langdist.batch import BatchGenerator
@@ -41,9 +42,12 @@ class CharLSTM(object):
         self._vocab_size = None
         self._encoder = CharEncoder()
         self._num_params = None
+        self._paragraph_border = None
+        self._paragraph_border_id = None
 
     def train(self, paragraphs, model_path, batch_size=64, patience=30000, max_iteration=1000000,
-              stat_interval=50, valid_interval=300, summary_interval=100, valid_size=0.1):
+              stat_interval=50, valid_interval=300, summary_interval=100,
+              sample_interval=300, valid_size=0.1):
         """Train a language model on the paragraphs of word IDs."""
 
         def add_metric_summary(summary_writer, mode, batch_id, perplexity):
@@ -117,6 +121,9 @@ class CharLSTM(object):
                     summaries = session.run(nodes['summaries'])
                     summary_writer.add_summary(summaries, global_step=batch_id)
 
+                if batch_id > 0 and batch_id % sample_interval == 0:
+                    self._sample(session)
+
                 if iteration >= patience:
                     break
 
@@ -166,10 +173,18 @@ class CharLSTM(object):
                 rnn_dropout = tf.where(
                     nodes['is_train'], tf.constant(self._rnn_dropout), tf.constant(1.0))
 
-            # get the shape of the input
-            X_shape = tf.shape(nodes['X'])
-            batch_size = X_shape[0]
-            max_seq_len = X_shape[1]
+                # get the shape of the input
+                X_shape = tf.shape(nodes['X'])
+                batch_size = X_shape[0]
+                max_seq_len = X_shape[1]
+
+                nodes['initial_states'] = tf.placeholder_with_default(
+                    tf.zeros([self._num_rnn_layers, 2, batch_size, self._rnn_size], tf.float32),
+                    [self._num_rnn_layers, 2, None, self._rnn_size], 'initial_states')
+                initial_states = tf.unstack(nodes['initial_states'], axis=0)
+                initial_states = tuple(
+                    [LSTMStateTuple(initial_states[layer_id][0], initial_states[layer_id][1])
+                     for layer_id in range(self._num_rnn_layers)])
 
             with tf.name_scope('embedding_layer'):
                 nodes['embeddings'] = tf.Variable(
@@ -182,8 +197,8 @@ class CharLSTM(object):
                 rnn_cell = LSTMCell(num_units=self._rnn_size)
                 rnn_cell = DropoutWrapper(rnn_cell, output_keep_prob=rnn_dropout)
                 rnn_cell = MultiRNNCell([rnn_cell] * self._num_rnn_layers)
-                rnn_outputs, states = tf.nn.dynamic_rnn(
-                    rnn_cell, embedded, nodes['seq_lens'], dtype=tf.float32)
+                rnn_outputs, nodes['states'] = tf.nn.dynamic_rnn(
+                    rnn_cell, embedded, nodes['seq_lens'], initial_states, dtype=tf.float32)
 
                 # reshape rnn_outputs so we can compute activations for all the time steps at once
                 rnn_outputs = tf.reshape(rnn_outputs, [-1, self._rnn_size])
@@ -202,6 +217,10 @@ class CharLSTM(object):
                 nodes['loss'] = sequence_loss(logits=logits, targets=nodes['Y'], weights=weights)
                 nodes['optimizer'] = tf.train.AdamOptimizer(self._learning_rate).minimize(
                     nodes['loss'])
+
+            with tf.variable_scope('outputs'):
+                nodes['Y_prob'] = tf.nn.softmax(logits)
+                nodes['y_pred'] = tf.argmax(nodes['Y_prob'], axis=2)
 
             # initialize the variables
             nodes['init'] = tf.global_variables_initializer()
@@ -256,6 +275,68 @@ class CharLSTM(object):
         if fit:
             encoded_paragraphs = self._encoder.fit_encode(paragraphs)
             self._vocab_size = self._encoder.vocab_size
+            self._paragraph_border = self._encoder.paragraph_border
+            self._paragraph_border_id = self._encoder.paragraph_border_id
         else:
             encoded_paragraphs = self._encoder.encode(paragraphs)
         return encoded_paragraphs
+
+    def _decode_chars(self, paragraphs):
+        """Convert paragraphs of encoded character IDs into decoded characters."""
+        return self._encoder.decode(paragraphs)
+
+    def _sample(self, session, sample_num=10, prompts=None, pick_top_k=10, max_char_len=300):
+        """Sample paragraphs using a trained model running on the given session."""
+
+        def sample_chars_from_probs(Y_prob):
+            """Sample a character for each paragraph based on the predicted probabilities."""
+            Y_prob = np.squeeze(Y_prob)
+            chars = list()
+            for y_prob in Y_prob:
+                if pick_top_k:
+                    y_prob[np.argsort(y_prob)[:-pick_top_k]] = 0
+                    y_prob /= np.sum(y_prob)
+                chars.append(np.random.choice(self._vocab_size, 1, p=y_prob)[0])
+            return chars
+
+        paragraphs = [[self._paragraph_border_id] for _ in range(sample_num)]
+        if prompts:
+            assert sample_num == len(prompts), 'sample_num != len(prompts)'
+            for paragraph_id, prompt in enumerate(prompts):
+                paragraphs[paragraph_id].append(self._encode_chars([prompt])[0])
+
+        X, seq_lens = self._add_padding(paragraphs)
+        paragraph_ids = list(range(sample_num))  # IDs of paragraphs to still sample
+        nodes = self._nodes
+        initial_states = np.zeros((self._num_rnn_layers, 2, sample_num, self._rnn_size))
+
+        while paragraph_ids and len(max(paragraphs, key=len)) < max_char_len:
+            Y_prob, states = session.run(
+                [nodes['Y_prob'], nodes['states']],
+                feed_dict={nodes['X']: X, nodes['seq_lens']: seq_lens, nodes['is_train']: False,
+                           nodes['initial_states']: initial_states})
+            sampled_char_ids = sample_chars_from_probs(Y_prob)
+            next_sample_ids = list()
+
+            for sample_id, paragraph_id in enumerate(paragraph_ids):
+                sampled_char_id = sampled_char_ids[sample_id]
+
+                # don't process paragraphs that already finish sampling
+                if sampled_char_id == self._paragraph_border_id:
+                    continue
+
+                paragraphs[paragraph_id].append(sampled_char_id)
+                next_sample_ids.append(sample_id)
+
+            # prepare next input
+            # don't process paragraphs that already finish sampling
+            paragraph_ids = [paragraph_ids[sample_id] for sample_id in next_sample_ids]
+            initial_states = np.array(states)[:, :, np.array(next_sample_ids)]
+            X = list()
+            for paragraph_id in paragraph_ids:
+                X.append([paragraphs[paragraph_id][-1]])
+            X, seq_lens = self._add_padding(X)
+
+        paragraphs = self._decode_chars(paragraphs)
+        _LOGGER.info('Sampled paragraphs: \n{}'
+                     .format('\n'.join(map(lambda x: x.strip(), paragraphs))))
