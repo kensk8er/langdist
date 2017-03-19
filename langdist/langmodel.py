@@ -300,7 +300,7 @@ class CharLSTM(object):
 
         def sample_chars_from_probs(Y_prob):
             """Sample a character for each paragraph based on the predicted probabilities."""
-            Y_prob = np.squeeze(Y_prob)
+            Y_prob = np.squeeze(Y_prob, axis=1)
             chars = list()
             for y_prob in Y_prob:
                 if pick_top_k:
