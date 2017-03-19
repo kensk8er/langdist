@@ -60,8 +60,8 @@ class CharLSTM(object):
         X_train, X_valid = train_test_split(
             X, random_state=self._random_state, test_size=valid_size)
 
-        X_valid, seq_lens_valid = self._add_padding(X_valid)
         X_valid, Y_valid = self._create_Y(X_valid)
+        X_valid, Y_valid, seq_lens_valid = self._add_padding(X_valid, Y_valid)
 
         self._build_graph()
         nodes = self._nodes
@@ -85,8 +85,8 @@ class CharLSTM(object):
                     _LOGGER.info('Iteration is more than max_iteration, finish training.')
                     break
 
-                X_batch, seq_lens = self._add_padding(X_batch)
                 X_batch, Y_batch = self._create_Y(X_batch)
+                X_batch, Y_batch, seq_lens = self._add_padding(X_batch, Y_batch)
 
                 # Predict labels and update the parameters
                 _, loss = session.run(
@@ -240,22 +240,25 @@ class CharLSTM(object):
         self._graph = graph
         self._nodes = nodes
 
-    def _add_padding(self, X):
+    def _add_padding(self, X, Y):
         """
-        Add paddings to X in order to align the sequence lengths.
+        Add paddings to X and Y in order to align the sequence lengths.
 
         :param X: list of sequences of word IDs
+        :param Y: list of sequences of word IDs
         :return: padded list of sequences of word IDs and list of sequence length before padding
         """
         X = deepcopy(X)
+        Y = deepcopy(Y)
         max_len = max(len(x) for x in X)
 
         seq_lens = list()
-        for x in X:
+        for x, y in zip(X, Y):
             seq_lens.append(len(x))
             pad_len = max_len - len(x)
             x.extend([self._padding_id for _ in range(pad_len)])
-        return X, seq_lens
+            y.extend([self._padding_id for _ in range(pad_len)])
+        return X, Y, seq_lens
 
     def _create_Y(self, X):
         """
@@ -264,7 +267,7 @@ class CharLSTM(object):
         """
         Y = list()
         for x in X:
-            y = x
+            y = copy(x)
             y.append(self._paragraph_border_id)
             Y.append(y)
             x.insert(0, self._paragraph_border_id)
