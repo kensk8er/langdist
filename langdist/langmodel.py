@@ -64,7 +64,8 @@ class CharLSTM(object):
 
         # Launch the graph
         with tf.Session(graph=self._graph) as session:
-            summary_writer = tf.summary.FileWriter(os.path.join(model_path, 'tensorboard.log'))
+            summary_writer = tf.summary.FileWriter(
+                os.path.join(model_path, 'tensorboard.log'), session.graph)
             _LOGGER.info('Start fitting a model...')
             session.run(nodes['init'])
             losses = list()
@@ -102,6 +103,8 @@ class CharLSTM(object):
                     perplexity = np.exp(np.mean(valid_loss))
                     _LOGGER.info('Epoch={}, Iter={:,}, Mean Perplexity (Validation set)= {:.3f}'
                                  .format(epoch, iteration, perplexity))
+                    add_metric_summary(summary_writer, 'valid', batch_id, perplexity)
+
                     if perplexity < best_perplexity:
                         _LOGGER.info('Best perplexity so far, save the model.')
                         self._save(model_path, session)
@@ -178,7 +181,7 @@ class CharLSTM(object):
                 nodes['b_s'] = tf.Variable(tf.random_normal([self._vocab_size]), name='bias')
                 logits = tf.matmul(rnn_outputs, nodes['W_s']) + nodes['b_s']
 
-            with tf.variable_scope('loss'):
+            with tf.variable_scope('optimizer'):
                 # reshape the logits back to batch_size * seq_lens such that we can compute mean
                 # loss after masking padding inputs easily by using sequence_loss
                 X_shape = tf.shape(nodes['X'])
