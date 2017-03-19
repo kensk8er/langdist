@@ -240,7 +240,7 @@ class CharLSTM(object):
         self._graph = graph
         self._nodes = nodes
 
-    def _add_padding(self, X, Y):
+    def _add_padding(self, X, Y=None):
         """
         Add paddings to X and Y in order to align the sequence lengths.
 
@@ -249,10 +249,17 @@ class CharLSTM(object):
         :return: padded list of sequences of word IDs and list of sequence length before padding
         """
         X = deepcopy(X)
-        Y = deepcopy(Y)
         max_len = max(len(x) for x in X)
-
         seq_lens = list()
+
+        if not Y:
+            for x in X:
+                seq_lens.append(len(x))
+                pad_len = max_len - len(x)
+                x.extend([self._padding_id for _ in range(pad_len)])
+            return X, seq_lens
+
+        Y = deepcopy(Y)
         for x, y in zip(X, Y):
             seq_lens.append(len(x))
             pad_len = max_len - len(x)
