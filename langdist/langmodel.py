@@ -2,10 +2,13 @@
 """
 This module implements language modeling algorithms.
 """
-from copy import deepcopy
+from copy import deepcopy, copy
+import os
+import pickle
 
 import numpy as np
 import tensorflow as tf
+from sklearn.model_selection import train_test_split
 from tensorflow.contrib.rnn import DropoutWrapper, LSTMCell, MultiRNNCell
 from tensorflow.contrib.seq2seq import sequence_loss
 
@@ -21,6 +24,9 @@ _LOGGER = get_logger(__name__, write_file=True)
 class CharLSTM(object):
     """Character-based language modeling using LSTM."""
     _padding_id = 0  # TODO: 0 is used for actual character as well, which is a bit confusing...
+    _random_state = 0  # this is to make train/test split always return the same split
+    _checkpoint_file_name = 'checkpoint'
+    _instance_file_name = 'instance.pkl'
 
     def __init__(self, embedding_size=128, rnn_size=256, num_rnn_layers=2, learning_rate=0.002):
         self._embedding_size = embedding_size
@@ -33,23 +39,39 @@ class CharLSTM(object):
         self._encoder = CharEncoder()
         self._num_params = None
 
-    def train(self, paragraphs, batch_size=64, patience=30000, max_iteration=1000000,
-              stat_interval=100):
+    def train(self, paragraphs, model_path, batch_size=64, patience=30000, max_iteration=1000000,
+              stat_interval=50, valid_interval=300, summary_interval=100, valid_size=0.1):
         """Train a language model on the paragraphs of word IDs."""
+
+        def add_metric_summary(summary_writer, mode, batch_id, perplexity):
+            """Add summary for metric."""
+            metric_summary = tf.Summary()
+            metric_summary.value.add(tag='{}_perplexity'.format(mode), simple_value=perplexity)
+            summary_writer.add_summary(metric_summary, global_step=batch_id)
+
         X = self._encode_chars(paragraphs, fit=True)
+        X_train, X_valid = train_test_split(
+            X, random_state=self._random_state, test_size=valid_size)
+
+        X_valid, seq_lens_valid = self._add_padding(X_valid)
+        Y_valid = self._create_Y(X_valid)
+
         self._build_graph()
         nodes = self._nodes
-        train_size = len(X)
-        batch_generator = BatchGenerator(X, batch_size)
+        train_size = len(X_train)
+        train_batch_generator = BatchGenerator(X_train, batch_size)
+        best_perplexity = np.float64('inf')
 
         # Launch the graph
         with tf.Session(graph=self._graph) as session:
+            summary_writer = tf.summary.FileWriter(os.path.join(model_path, 'tensorboard.log'))
             _LOGGER.info('Start fitting a model...')
             session.run(nodes['init'])
             losses = list()
 
-            for batch_id, X_batch in enumerate(batch_generator):
+            for batch_id, X_batch in enumerate(train_batch_generator):
                 iteration = batch_id * batch_size
+                epoch = 1 + iteration // train_size
 
                 if iteration > max_iteration:
                     _LOGGER.info('Iteration is more than max_iteration, finish training.')
@@ -66,17 +88,50 @@ class CharLSTM(object):
                 losses.append(loss)
 
                 if batch_id > 0 and batch_id % stat_interval == 0:
-                    epoch = 1 + iteration // train_size
-                    _LOGGER.info('Epoch={}, Iter={:,}, Mean Training Loss= {:.3f}'
-                                 .format(epoch, iteration, np.mean(losses)))
+                    perplexity = np.exp(np.mean(losses))  # cross entropy is log-perplexity
+                    _LOGGER.info('Epoch={}, Iter={:,}, Mean Perplexity (Training batch)= {:.3f}'
+                                 .format(epoch, iteration, perplexity))
                     losses = list()
+                    add_metric_summary(summary_writer, 'train', batch_id, perplexity)
+
+                if batch_id % valid_interval == 0:
+                    valid_loss = session.run(
+                        nodes['loss'],
+                        feed_dict={nodes['X']: X_valid, nodes['Y']: Y_valid,
+                                   nodes['seq_lens']: seq_lens_valid, nodes['dropout_prob']: 1.0})
+                    perplexity = np.exp(np.mean(valid_loss))
+                    _LOGGER.info('Epoch={}, Iter={:,}, Mean Perplexity (Validation set)= {:.3f}'
+                                 .format(epoch, iteration, perplexity))
+                    if perplexity < best_perplexity:
+                        _LOGGER.info('Best perplexity so far, save the model.')
+                        self._save(model_path, session)
+                        best_perplexity = perplexity
+
+                if batch_id % summary_interval == 0:
+                    _LOGGER.info('Write summary to the log.')
+                    summaries = session.run(nodes['summaries'])
+                    summary_writer.add_summary(summaries, global_step=batch_id)
 
                 if iteration >= patience:
-                    _LOGGER.info('Early Stopping. No more significant improvement in validation '
-                                 'score expected.')
                     break
 
         _LOGGER.info('Finished fitting the model.')
+        _LOGGER.info('Best perplexity: {:.3f}'.format(best_perplexity))
+
+    def _save(self, model_path, session):
+        """Save the tensorflow session and the instance object of this Python class."""
+        if not os.path.exists(model_path):
+            os.makedirs(model_path)
+
+        # save the session
+        self._nodes['saver'].save(
+            session, os.path.join(model_path, self._checkpoint_file_name))
+
+        # save the instance
+        instance = copy(self)
+        instance._graph = None  # _graph is not picklable
+        instance._nodes = None  # _nodes is not pciklable
+        pickle.dump(instance, os.path.join(model_path, self._instance_file_name))
 
     def _build_graph(self):
         """Build computational graph."""
@@ -142,6 +197,14 @@ class CharLSTM(object):
             # count the number of parameters
             self._num_params = get_num_params()
             _LOGGER.info('Total number of parameters = {:,}'.format(self._num_params))
+
+            # generate summaries
+            for variable in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
+                tf.summary.histogram(variable.name, variable)
+            nodes['summaries'] = tf.summary.merge_all()
+
+            # save the model to checkpoint
+            nodes['saver'] = tf.train.Saver()
 
         self._graph = graph
         self._nodes = nodes
