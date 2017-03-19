@@ -272,6 +272,7 @@ class CharLSTM(object):
         Create Y (correct character sequences) based on X (input character sequences). Also prepend
         the paragraph border character to X (in order to learn the beginning of a paragraph.
         """
+        X = deepcopy(X)
         Y = list()
         for x in X:
             y = copy(x)
