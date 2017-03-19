@@ -25,7 +25,7 @@ class CharLSTM(object):
     """Character-based language modeling using LSTM."""
     _padding_id = 0  # TODO: 0 is used for actual character as well, which is a bit confusing...
     _random_state = 0  # this is to make train/test split always return the same split
-    _checkpoint_file_name = 'checkpoint'
+    _checkpoint_file_name = 'model.ckpt'
     _instance_file_name = 'instance.pkl'
 
     def __init__(self, embedding_size=128, rnn_size=256, num_rnn_layers=2, learning_rate=0.002):
@@ -94,7 +94,7 @@ class CharLSTM(object):
                     losses = list()
                     add_metric_summary(summary_writer, 'train', batch_id, perplexity)
 
-                if batch_id % valid_interval == 0:
+                if batch_id > 0 and batch_id % valid_interval == 0:
                     valid_loss = session.run(
                         nodes['loss'],
                         feed_dict={nodes['X']: X_valid, nodes['Y']: Y_valid,
@@ -107,8 +107,7 @@ class CharLSTM(object):
                         self._save(model_path, session)
                         best_perplexity = perplexity
 
-                if batch_id % summary_interval == 0:
-                    _LOGGER.info('Write summary to the log.')
+                if batch_id > 0 and batch_id % summary_interval == 0:
                     summaries = session.run(nodes['summaries'])
                     summary_writer.add_summary(summaries, global_step=batch_id)
 
@@ -124,14 +123,14 @@ class CharLSTM(object):
             os.makedirs(model_path)
 
         # save the session
-        self._nodes['saver'].save(
-            session, os.path.join(model_path, self._checkpoint_file_name))
+        self._nodes['saver'].save(session, os.path.join(model_path, self._checkpoint_file_name))
 
         # save the instance
         instance = copy(self)
         instance._graph = None  # _graph is not picklable
         instance._nodes = None  # _nodes is not pciklable
-        pickle.dump(instance, os.path.join(model_path, self._instance_file_name))
+        with open(os.path.join(model_path, self._instance_file_name), 'wb') as pickle_file:
+            pickle.dump(instance, pickle_file)
 
     def _build_graph(self):
         """Build computational graph."""
