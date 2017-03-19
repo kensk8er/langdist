@@ -180,11 +180,15 @@ class CharLSTM(object):
 
             with tf.name_scope('rnn_layer'):
                 rnn_cell = LSTMCell(num_units=self._rnn_size)
+                nodes['initial_state'] = tf.Variable(
+                    rnn_cell.zero_state(batch_size=1, dtype=tf.float32))
+                initial_states = tf.split(tf.tile(nodes['initial_state'], [1, batch_size, 1]), 2, 0)
+                initial_states = [tf.squeeze(initial_state, [0])
+                                  for initial_state in initial_states]
                 rnn_cell = DropoutWrapper(rnn_cell, output_keep_prob=rnn_dropout)
                 rnn_cell = MultiRNNCell([rnn_cell] * self._num_rnn_layers)
-                nodes['initial_state'] = tf.Variable(rnn_cell.zero_states(batch_size, tf.float32))
                 rnn_outputs, states = tf.nn.dynamic_rnn(
-                    rnn_cell, embedded, nodes['seq_lens'], nodes['initial_state'], tf.float32)
+                    rnn_cell, embedded, nodes['seq_lens'], initial_states, tf.float32)
 
                 # reshape rnn_outputs so we can compute activations for all the time steps at once
                 rnn_outputs = tf.reshape(rnn_outputs, [-1, self._rnn_size])
