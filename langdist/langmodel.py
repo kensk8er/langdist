@@ -28,11 +28,14 @@ class CharLSTM(object):
     _checkpoint_file_name = 'model.ckpt'
     _instance_file_name = 'instance.pkl'
 
-    def __init__(self, embedding_size=128, rnn_size=256, num_rnn_layers=2, learning_rate=0.002):
+    def __init__(self, embedding_size=128, rnn_size=256, num_rnn_layers=2, learning_rate=0.002,
+                 rnn_dropout=0.5, input_dropout=0.8):
         self._embedding_size = embedding_size
         self._rnn_size = rnn_size
         self._num_rnn_layers = num_rnn_layers
         self._learning_rate = learning_rate
+        self._rnn_dropout = rnn_dropout
+        self._input_dropout = input_dropout
         self._nodes = None
         self._graph = None
         self._vocab_size = None
@@ -85,7 +88,7 @@ class CharLSTM(object):
                 _, loss = session.run(
                     [nodes['optimizer'], nodes['loss']],
                     feed_dict={nodes['X']: X_batch, nodes['Y']: Y_batch,
-                               nodes['seq_lens']: seq_lens, nodes['dropout_prob']: 0.5})
+                               nodes['seq_lens']: seq_lens, nodes['is_train']: True})
                 losses.append(loss)
 
                 if batch_id > 0 and batch_id % stat_interval == 0:
@@ -99,7 +102,7 @@ class CharLSTM(object):
                     valid_loss = session.run(
                         nodes['loss'],
                         feed_dict={nodes['X']: X_valid, nodes['Y']: Y_valid,
-                                   nodes['seq_lens']: seq_lens_valid, nodes['dropout_prob']: 1.0})
+                                   nodes['seq_lens']: seq_lens_valid, nodes['is_train']: False})
                     perplexity = np.exp(np.mean(valid_loss))
                     _LOGGER.info('Epoch={}, Iter={:,}, Mean Perplexity (Validation set)= {:.3f}'
                                  .format(epoch, iteration, perplexity))
@@ -157,17 +160,22 @@ class CharLSTM(object):
                 nodes['X'] = tf.placeholder(tf.int32, [None, None], name='X')
                 nodes['Y'] = tf.placeholder(tf.int32, [None, None], name='Y')
                 nodes['seq_lens'] = tf.placeholder(tf.int32, [None], name='seq_lens')
-                nodes['dropout_prob'] = tf.placeholder(tf.float32, shape=[], name='dropout_prob')
+                nodes['is_train'] = tf.placeholder(tf.bool, shape=[], name='is_train')
+                input_dropout = tf.where(
+                    nodes['is_train'], tf.constant(self._input_dropout), tf.constant(1.0))
+                rnn_dropout = tf.where(
+                    nodes['is_train'], tf.constant(self._rnn_dropout), tf.constant(1.0))
 
             with tf.name_scope('embedding_layer') as name_scope:
                 nodes['embeddings'] = tf.Variable(
                     tf.random_uniform([self._vocab_size, self._embedding_size], -1.0, 1.0),
                     trainable=True, name='embeddings')
                 embedded = tf.nn.embedding_lookup(nodes['embeddings'], nodes['X'])
+                embedded = tf.nn.dropout(embedded, input_dropout, name='input_dropout')
 
             with tf.name_scope('rnn_layer') as name_scope:
                 rnn_cell = LSTMCell(num_units=self._rnn_size)
-                rnn_cell = DropoutWrapper(rnn_cell, input_keep_prob=nodes['dropout_prob'])
+                rnn_cell = DropoutWrapper(rnn_cell, output_keep_prob=rnn_dropout)
                 rnn_cell = MultiRNNCell([rnn_cell] * self._num_rnn_layers)
                 rnn_outputs, states = tf.nn.dynamic_rnn(
                     rnn_cell, embedded, dtype=tf.float32, sequence_length=nodes['seq_lens'])
