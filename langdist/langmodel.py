@@ -197,9 +197,6 @@ class CharLSTM(object):
             with tf.variable_scope('optimizer'):
                 # reshape the logits back to batch_size * seq_lens such that we can compute mean
                 # loss after masking padding inputs easily by using sequence_loss
-                X_shape = tf.shape(nodes['X'])
-                batch_size = X_shape[0]
-                max_seq_len = X_shape[1]
                 logits = tf.reshape(logits, [batch_size, max_seq_len, -1])
                 weights = tf.cast(tf.sequence_mask(nodes['seq_lens'], max_seq_len), tf.float32)
                 nodes['loss'] = sequence_loss(logits=logits, targets=nodes['Y'], weights=weights)
@@ -249,9 +246,9 @@ class CharLSTM(object):
         Y = list()
         for x in X:
             y = x
-            y.append(self._encoder.paragraph_border_id)
+            y.append(self._paragraph_border_id)
             Y.append(y)
-            x.insert(0, self._encoder.paragraph_border_id)
+            x.insert(0, self._paragraph_border_id)
         return X, Y
 
     def _encode_chars(self, paragraphs, fit):
