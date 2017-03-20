@@ -29,14 +29,19 @@ class CharLSTM(object):
     _checkpoint_file_name = 'model.ckpt'
     _instance_file_name = 'instance.pkl'
 
-    def __init__(self, embedding_size=128, rnn_size=256, num_rnn_layers=2, learning_rate=0.002,
-                 rnn_dropout=0.5, input_dropout=0.8):
+    def __init__(self, embedding_size=128, rnn_size=256, num_rnn_layers=2, learning_rate=0.003,
+                 rnn_dropouts=None, final_dropout=0.5):
+        # in order to avoid using mutable object as a default argument
+        if rnn_dropouts is None:
+            rnn_dropouts = [1.0 for _ in range(num_rnn_layers)]
+        assert len(rnn_dropouts) == num_rnn_layers, 'len(rnn_dropouts) != num_rnn_layers'
+
         self._embedding_size = embedding_size
         self._rnn_size = rnn_size
         self._num_rnn_layers = num_rnn_layers
         self._learning_rate = learning_rate
-        self._rnn_dropout = rnn_dropout
-        self._input_dropout = input_dropout
+        self._rnn_dropouts = rnn_dropouts
+        self._final_dropout = final_dropout
         self._nodes = None
         self._graph = None
         self._vocab_size = None
@@ -165,10 +170,10 @@ class CharLSTM(object):
                 nodes['Y'] = tf.placeholder(tf.int32, [None, None], name='Y')
                 nodes['seq_lens'] = tf.placeholder(tf.int32, [None], name='seq_lens')
                 nodes['is_train'] = tf.placeholder(tf.bool, shape=[], name='is_train')
-                input_dropout = tf.where(
-                    nodes['is_train'], tf.constant(self._input_dropout), tf.constant(1.0))
-                rnn_dropout = tf.where(
-                    nodes['is_train'], tf.constant(self._rnn_dropout), tf.constant(1.0))
+                rnn_dropouts = tf.where(nodes['is_train'], tf.constant(self._rnn_dropouts),
+                                        tf.ones([self._num_rnn_layers]))
+                final_dropout = tf.where(
+                    nodes['is_train'], tf.constant(self._final_dropout), tf.constant(1.0))
 
                 # get the shape of the input
                 X_shape = tf.shape(nodes['X'])
@@ -188,17 +193,21 @@ class CharLSTM(object):
                     tf.random_uniform([self._vocab_size, self._embedding_size], -1.0, 1.0),
                     trainable=True, name='embeddings')
                 embedded = tf.nn.embedding_lookup(nodes['embeddings'], nodes['X'])
-                embedded = tf.nn.dropout(embedded, input_dropout, name='input_dropout')
 
             with tf.name_scope('rnn_layer'):
-                rnn_cell = LSTMCell(num_units=self._rnn_size)
-                rnn_cell = DropoutWrapper(rnn_cell, output_keep_prob=rnn_dropout)
-                rnn_cell = MultiRNNCell([rnn_cell] * self._num_rnn_layers)
+                cells = list()
+                for layer_id in range(self._num_rnn_layers):
+                    cell = LSTMCell(num_units=self._rnn_size)
+                    cell = DropoutWrapper(cell, input_keep_prob=rnn_dropouts[layer_id])
+                    cells.append(cell)
+
+                rnn_cell = MultiRNNCell(cells)
                 rnn_outputs, nodes['states'] = tf.nn.dynamic_rnn(
                     rnn_cell, embedded, nodes['seq_lens'], initial_states, dtype=tf.float32)
 
                 # reshape rnn_outputs so we can compute activations for all the time steps at once
                 rnn_outputs = tf.reshape(rnn_outputs, [-1, self._rnn_size])
+                rnn_outputs = tf.nn.dropout(rnn_outputs, final_dropout, name='final_dropout')
 
             with tf.variable_scope('softmax_layer'):
                 nodes['W_s'] = tf.Variable(
