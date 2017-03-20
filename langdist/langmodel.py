@@ -81,8 +81,8 @@ class CharLSTM(object):
                 iteration = batch_id * batch_size
                 epoch = 1 + iteration // train_size
 
-                if iteration > max_iteration:
-                    _LOGGER.info('Iteration is more than max_iteration, finish training.')
+                if iteration > max_iteration or iteration > patience:
+                    _LOGGER.info('Iteration is more than max_iteration/patience, finish training.')
                     break
 
                 X_batch, Y_batch = self._create_Y(X_batch)
@@ -123,9 +123,6 @@ class CharLSTM(object):
 
                 if batch_id > 0 and batch_id % sample_interval == 0:
                     self._sample(session)
-
-                if iteration >= patience:
-                    break
 
         _LOGGER.info('Finished fitting the model.')
         _LOGGER.info('Best perplexity: {:.3f}'.format(best_perplexity))
@@ -270,7 +267,7 @@ class CharLSTM(object):
     def _create_Y(self, X):
         """
         Create Y (correct character sequences) based on X (input character sequences). Also prepend
-        the paragraph border character to X (in order to learn the beginning of a paragraph.
+        the paragraph border character to X (in order to learn the beginning of a paragraph).
         """
         X = deepcopy(X)
         Y = list()
@@ -279,6 +276,7 @@ class CharLSTM(object):
             y.append(self._paragraph_border_id)
             Y.append(y)
             x.insert(0, self._paragraph_border_id)
+            assert len(x) == len(y), 'len(x) != len(y)'
         return X, Y
 
     def _encode_chars(self, paragraphs, fit):

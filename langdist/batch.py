@@ -2,7 +2,7 @@
 """
 Define classes related to batch processing here.
 """
-from copy import copy
+from copy import deepcopy
 from random import shuffle
 
 __author__ = 'kensk8er1017@gmail.com'
@@ -31,7 +31,7 @@ class BatchGenerator(object):
         assert isinstance(X, list), 'Invalid argument type type(X) = {}'.format(type(X))
         assert batch_size > 0, 'batch_size <= 0'
 
-        self._X = copy(X)  # BatchGenerator shouldn't have a by-product
+        self._X = deepcopy(X)  # BatchGenerator shouldn't have a by-product
         self._batch_id = 0
         self._batch_size = batch_size
         self._shuffle = shuffle

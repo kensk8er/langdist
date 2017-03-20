@@ -17,9 +17,10 @@ class CharEncoder(object):
         self.paragraph_border_id = None
 
     def fit(self, paragraphs):
-        paragraphs[0] += self.paragraph_border
-        self._label_encoder.fit(list(''.join(paragraphs)))
-        self.paragraph_border_id = self._label_encoder.transform([self.paragraph_border])[0]
+        characters = list(''.join(paragraphs))
+        characters.insert(0, self.paragraph_border)
+        self._label_encoder.fit(characters)
+        self.paragraph_border_id = int(self._label_encoder.transform([self.paragraph_border])[0])
 
     def encode(self, paragraphs):
         encoded_paragraphs = list()
