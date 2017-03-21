@@ -3,35 +3,33 @@
 Write training routine here.
 """
 import os
-import pickle
 import shutil
 
-from langdist import PACKAGE_ROOT
+import pickle
+
+from langdist.constant import MODEL_DIR
 from langdist.langmodel import CharLSTM
 from langdist.util import get_logger
+from langdist.preprocess import load_corpus
 
 __author__ = 'kensk8er1017@gmail.com'
 
 _LOGGER = get_logger(__name__, write_file=True)
-
-_CORPUS_DIR = os.path.join(PACKAGE_ROOT, os.path.pardir, 'corpora')
-_MODEL_DIR = os.path.join(PACKAGE_ROOT, os.path.pardir, 'models')
 
 
 def main():
     # TODO: develop CLI and log configuration of each run
     locale = 'zh'
     _LOGGER.info('Locale={}'.format(locale))
+    paragraphs = load_corpus(locale)
+    universal_encoder = pickle.load(open(os.path.join(MODEL_DIR, 'encoder.pkl'), 'rb'))
+    char_lstm = CharLSTM(encoder=universal_encoder)
 
-    with open(os.path.join(_CORPUS_DIR, '{}.pkl'.format(locale)), 'rb') as corpus_file:
-        paragraphs = pickle.load(corpus_file)
-
-    char_lstm = CharLSTM()
-
-    model_path = os.path.join(_MODEL_DIR, locale)
+    model_path = os.path.join(MODEL_DIR, locale)
     if os.path.exists(model_path):
         shutil.rmtree(model_path)
     char_lstm.train(paragraphs, model_path=model_path, patience=1000000)
+
 
 if __name__ == '__main__':
     main()

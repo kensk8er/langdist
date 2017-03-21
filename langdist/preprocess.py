@@ -7,12 +7,10 @@ import pickle
 
 import regex
 
-from langdist import PACKAGE_ROOT
 from langdist.util import CorpusParser
+from langdist.constant import CORPUS_DIR
 
 __author__ = 'kensk8er1017@gmail.com'
-
-_PROCESSED_CORPUS_DIR = os.path.join(PACKAGE_ROOT, os.path.pardir, 'corpora')
 
 
 def _preprocess(paragraph, locale):
@@ -38,10 +36,22 @@ def preprocess_corpus(locale):
         paragraph = _preprocess(paragraph, locale)
         corpus.append(paragraph)
 
-    processed_filepath = os.path.join(_PROCESSED_CORPUS_DIR, '{}.pkl'.format(locale))
+    processed_filepath = os.path.join(CORPUS_DIR, '{}.pkl'.format(locale))
     with open(processed_filepath, 'wb') as processed_file:
         pickle.dump(corpus, processed_file)
 
 
 if __name__ == '__main__':
     preprocess_corpus('en')
+
+
+def load_corpus(locale):
+    """Load corpus for the locale and return paragraphs (list of paragraphs (str))."""
+    processed_corpus_path = os.path.join(CORPUS_DIR, '{}.pkl'.format(locale))
+
+    if not os.path.exists(processed_corpus_path):
+        preprocess_corpus(locale)
+
+    with open(processed_corpus_path, 'rb') as corpus_file:
+        paragraphs = pickle.load(corpus_file)
+    return paragraphs

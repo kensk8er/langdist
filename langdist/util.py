@@ -2,16 +2,16 @@
 """
 Utility module.
 """
-import os
-from xml.dom import minidom
-from logging import getLogger
 import logging
+import os
+from logging import getLogger
+from xml.dom import minidom
 
 from langdist import PACKAGE_ROOT
+from langdist.constant import CORPUS_DIR
 
 __author__ = 'kensk8er1017@gmail.com'
 
-_CORPUS_DIR = os.path.join(PACKAGE_ROOT, os.path.pardir, 'corpora')
 _LOG_DIR = os.path.join(PACKAGE_ROOT, os.path.pardir, 'logs')
 
 
@@ -20,7 +20,7 @@ class CorpusParser(object):
 
     def __init__(self, locale):
         self._locale = locale
-        self._corpus_path = os.path.join(_CORPUS_DIR, '{}.xml'.format(locale))
+        self._corpus_path = os.path.join(CORPUS_DIR, '{}.xml'.format(locale))
 
     def gen_paragraphs(self):
         """Yield paragraph of the corpus."""

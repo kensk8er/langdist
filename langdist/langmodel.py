@@ -30,7 +30,7 @@ class CharLSTM(object):
     _instance_file_name = 'instance.pkl'
 
     def __init__(self, embedding_size=128, rnn_size=256, num_rnn_layers=2, learning_rate=0.003,
-                 rnn_dropouts=None, final_dropout=0.5):
+                 rnn_dropouts=None, final_dropout=0.5, encoder=None):
         # in order to avoid using mutable object as a default argument
         if rnn_dropouts is None:
             rnn_dropouts = [1.0 for _ in range(num_rnn_layers)]
@@ -45,7 +45,7 @@ class CharLSTM(object):
         self._nodes = None
         self._graph = None
         self._vocab_size = None
-        self._encoder = CharEncoder()
+        self._encoder = encoder if encoder else CharEncoder()
         self._num_params = None
         self._paragraph_border = None
         self._paragraph_border_id = None
@@ -291,7 +291,10 @@ class CharLSTM(object):
     def _encode_chars(self, paragraphs, fit):
         """Convert paragraphs of characters into encoded characters (character IDs)."""
         if fit:
-            encoded_paragraphs = self._encoder.fit_encode(paragraphs)
+            if self._encoder.is_fit():
+                encoded_paragraphs = self._encoder.encode(paragraphs)
+            else:
+                encoded_paragraphs = self._encoder.fit_encode(paragraphs)
             self._vocab_size = self._encoder.vocab_size
             self._paragraph_border = self._encoder.paragraph_border
             self._paragraph_border_id = self._encoder.paragraph_border_id
