@@ -5,6 +5,7 @@ This module implements language modeling algorithms.
 from copy import deepcopy, copy
 import os
 import pickle
+from math import ceil
 
 import numpy as np
 import tensorflow as tf
@@ -52,7 +53,7 @@ class CharLSTM(object):
 
     def train(self, paragraphs, model_path, batch_size=64, patience=30000, max_iteration=1000000,
               stat_interval=50, valid_interval=300, summary_interval=100,
-              sample_interval=300, valid_size=0.1):
+              sample_interval=300, valid_size=0.1, valid_batch_num=10):
         """Train a language model on the paragraphs of word IDs."""
 
         def add_metric_summary(summary_writer, mode, batch_id, perplexity):
@@ -60,6 +61,34 @@ class CharLSTM(object):
             metric_summary = tf.Summary()
             metric_summary.value.add(tag='{}_perplexity'.format(mode), simple_value=perplexity)
             summary_writer.add_summary(metric_summary, global_step=batch_id)
+
+        def validate(X_valid, Y_valid, seq_lens_valid, batch_id, best_perplexity, summary_writer):
+            """Validate the model on validation set."""
+            valid_losses = list()
+            batch_size = ceil(len(X_valid) / valid_batch_num)
+            for index in range(valid_batch_num):
+                X_valid_batch = X_valid[index * batch_size: (index + 1) * batch_size]
+                Y_valid_batch = Y_valid[index * batch_size: (index + 1) * batch_size]
+                seq_lens_valid_batch = seq_lens_valid[index * batch_size: (index + 1) * batch_size]
+
+                valid_loss = session.run(
+                    nodes['loss'],
+                    feed_dict={nodes['X']: X_valid_batch, nodes['Y']: Y_valid_batch,
+                               nodes['seq_lens']: seq_lens_valid_batch, nodes['is_train']: False})
+                valid_losses.append(valid_loss)
+
+            valid_loss = np.mean(valid_losses, dtype=np.float64)
+            perplexity = np.exp(np.mean(valid_loss))
+            _LOGGER.info('Epoch={}, Iter={:,}, Mean Perplexity (Validation set)= {:.3f}'
+                         .format(epoch, iteration, perplexity))
+            add_metric_summary(summary_writer, 'valid', batch_id, perplexity)
+
+            if perplexity < best_perplexity:
+                _LOGGER.info('Best perplexity so far, save the model.')
+                self._save(model_path, session)
+                best_perplexity = perplexity
+
+            return best_perplexity
 
         X = self._encode_chars(paragraphs, fit=True)
         X_train, X_valid = train_test_split(
@@ -107,20 +136,9 @@ class CharLSTM(object):
                     losses = list()
                     add_metric_summary(summary_writer, 'train', batch_id, perplexity)
 
-                if batch_id > 0 and batch_id % valid_interval == 0:
-                    valid_loss = session.run(
-                        nodes['loss'],
-                        feed_dict={nodes['X']: X_valid, nodes['Y']: Y_valid,
-                                   nodes['seq_lens']: seq_lens_valid, nodes['is_train']: False})
-                    perplexity = np.exp(np.mean(valid_loss))
-                    _LOGGER.info('Epoch={}, Iter={:,}, Mean Perplexity (Validation set)= {:.3f}'
-                                 .format(epoch, iteration, perplexity))
-                    add_metric_summary(summary_writer, 'valid', batch_id, perplexity)
-
-                    if perplexity < best_perplexity:
-                        _LOGGER.info('Best perplexity so far, save the model.')
-                        self._save(model_path, session)
-                        best_perplexity = perplexity
+                if batch_id % valid_interval == 0:
+                    best_perplexity = validate(
+                        X_valid, Y_valid, seq_lens_valid, batch_id, best_perplexity, summary_writer)
 
                 if batch_id > 0 and batch_id % summary_interval == 0:
                     summaries = session.run(nodes['summaries'])
