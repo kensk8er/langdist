@@ -318,6 +318,9 @@ class CharLSTM(object):
 
             # generate summaries
             for variable in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
+                # output_mask has inf in its values, which can't be added to summary
+                if variable == output_mask:
+                    continue
                 # having ":" in the name is illegal, so replace to "/"
                 tf.summary.histogram(variable.name.replace(':', '/'), variable)
             nodes['summaries'] = tf.summary.merge_all()
