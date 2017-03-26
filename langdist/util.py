@@ -27,7 +27,8 @@ class CorpusParser(object):
         xmldoc = minidom.parse(self._corpus_path)
         segments = xmldoc.getElementsByTagName('seg')
         for segment in segments:
-            yield segment.childNodes[0].nodeValue
+            if segment.childNodes:
+                yield segment.childNodes[0].nodeValue
 
 
 def get_logger(name, filename=None):
