@@ -97,6 +97,7 @@ class CharLSTM(object):
             # make the interval trice longer up to 2**9 = 512
             valid_intervals = [2**i for i in range(10)]
 
+        retrain = True if self._session else False
         fit_encoder = False if self._encoder.is_fit() else True
         X = self._encode_chars(paragraphs, fit=fit_encoder)
         X_train, X_valid = train_test_split(
@@ -105,7 +106,7 @@ class CharLSTM(object):
         X_valid, Y_valid = self._create_Y(X_valid)
         X_valid, Y_valid, seq_lens_valid = self._add_padding(X_valid, Y_valid)
 
-        if not self._graph:
+        if not retrain:
             self._build_graph()
         nodes = self._nodes
         train_size = len(X_train)
@@ -113,52 +114,57 @@ class CharLSTM(object):
         best_perplexity = np.float64('inf')
 
         # Launch the graph
-        with tf.Session(graph=self._graph) as session:
-            summary_writer = tf.summary.FileWriter(
-                os.path.join(model_path, self._tensorboard_dir), session.graph)
-            _LOGGER.info('Start fitting a model...')
+        session = self._session if retrain else tf.Session(graph=self._graph)
+        summary_writer = tf.summary.FileWriter(
+            os.path.join(model_path, self._tensorboard_dir), session.graph)
+        if not retrain:
             session.run(nodes['init'])
-            losses = list()
-            iteration = 0
-            valid_interval = valid_intervals.pop(0)
+        losses = list()
+        iteration = 0
+        valid_interval = valid_intervals.pop(0)
+        _LOGGER.info('Start fitting a model...')
 
-            for batch_id, X_batch in enumerate(train_batch_generator):
-                epoch = 1 + iteration // train_size
+        # iterate over batches
+        for batch_id, X_batch in enumerate(train_batch_generator):
+            epoch = 1 + iteration // train_size
 
-                if batch_id % valid_interval == 0:
-                    best_perplexity = validate(
-                        X_valid, Y_valid, seq_lens_valid, batch_id, best_perplexity, summary_writer)
-                    self._sample(session)
-                    valid_interval = valid_intervals.pop(0) if valid_intervals else valid_interval
+            if batch_id % valid_interval == 0:
+                best_perplexity = validate(
+                    X_valid, Y_valid, seq_lens_valid, batch_id, best_perplexity, summary_writer)
+                self._sample(session)
+                valid_interval = valid_intervals.pop(0) if valid_intervals else valid_interval
 
-                if batch_id % summary_interval == 0:
-                    summaries = session.run(nodes['summaries'])
-                    summary_writer.add_summary(summaries, global_step=iteration)
+            if batch_id % summary_interval == 0:
+                summaries = session.run(nodes['summaries'])
+                summary_writer.add_summary(summaries, global_step=iteration)
 
-                X_batch, Y_batch = self._create_Y(X_batch)
-                X_batch, Y_batch, seq_lens = self._add_padding(X_batch, Y_batch)
+            X_batch, Y_batch = self._create_Y(X_batch)
+            X_batch, Y_batch, seq_lens = self._add_padding(X_batch, Y_batch)
 
-                # Predict labels and update the parameters
-                _, loss = session.run(
-                    [nodes['optimizer'], nodes['loss']],
-                    feed_dict={nodes['X']: X_batch, nodes['Y']: Y_batch,
-                               nodes['seq_lens']: seq_lens, nodes['is_train']: True})
-                losses.append(loss)
-                iteration += batch_size
+            # Predict labels and update the parameters
+            _, loss = session.run(
+                [nodes['optimizer'], nodes['loss']],
+                feed_dict={nodes['X']: X_batch, nodes['Y']: Y_batch,
+                           nodes['seq_lens']: seq_lens, nodes['is_train']: True})
+            losses.append(loss)
+            iteration += batch_size
 
-                if batch_id % stat_interval == 0:
-                    perplexity = np.exp(np.mean(losses))  # cross entropy is log-perplexity
-                    _LOGGER.info('Epoch={}, Iter={:,}, Mean Perplexity (Training batch)= {:.3f}'
-                                 .format(epoch, iteration, perplexity))
-                    losses = list()
-                    add_metric_summary(summary_writer, 'train', iteration, perplexity)
+            if batch_id % stat_interval == 0:
+                perplexity = np.exp(np.mean(losses))  # cross entropy is log-perplexity
+                _LOGGER.info('Epoch={}, Iter={:,}, Mean Perplexity (Training batch)= {:.3f}'
+                             .format(epoch, iteration, perplexity))
+                losses = list()
+                add_metric_summary(summary_writer, 'train', iteration, perplexity)
 
-                if iteration > patience:
-                    _LOGGER.info('Iteration is more than patience, finish training.')
-                    break
+            if iteration > patience:
+                _LOGGER.info('Iteration is more than patience, finish training.')
+                break
 
         _LOGGER.info('Finished fitting the model.')
         _LOGGER.info('Best perplexity: {:.3f}'.format(best_perplexity))
+
+        # close the session
+        session.close()
 
     @classmethod
     def load(cls, model_path):
