@@ -20,7 +20,7 @@ from langdist.util import get_logger
 
 __author__ = 'kensk8er1017@gmail.com'
 
-_LOGGER = get_logger(__name__, write_file=True)
+_LOGGER = get_logger(__name__, filename='{}.log'.format(__name__))
 
 
 class CharLSTM(object):

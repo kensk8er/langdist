@@ -66,3 +66,11 @@ def fit_polyglot_encoder(model_path=_ENCODER_PATH):
     encoder.fit(paragraphs)
     with open(model_path, 'wb') as model_file:
         pickle.dump(encoder, model_file)
+
+
+def get_polyglot_encoder(model_path=_ENCODER_PATH):
+    """Return the encoder that is fit to all the locales."""
+    if not os.path.exists(model_path):
+        fit_polyglot_encoder(model_path)
+    with open(model_path, 'rb') as encoder_file:
+        return pickle.load(encoder_file)

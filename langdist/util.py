@@ -30,7 +30,7 @@ class CorpusParser(object):
             yield segment.childNodes[0].nodeValue
 
 
-def get_logger(name, write_file=False):
+def get_logger(name, filename=None):
     """Prepare logger for a given name space."""
     logger = getLogger(name)
     logger.setLevel(logging.DEBUG)
@@ -43,10 +43,10 @@ def get_logger(name, write_file=False):
     logger.addHandler(stream_handler)
 
     # file handler
-    if write_file:
+    if filename:
         if not os.path.exists(_LOG_DIR):
             os.mkdir(_LOG_DIR)
-        file_handler = logging.FileHandler(os.path.join(_LOG_DIR, '{}.log'.format(name)))
+        file_handler = logging.FileHandler(os.path.join(_LOG_DIR, filename))
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
