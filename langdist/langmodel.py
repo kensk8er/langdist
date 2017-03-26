@@ -206,6 +206,7 @@ class CharLSTM(object):
         instance = copy(self)
         instance._graph = None  # _graph is not picklable
         instance._nodes = None  # _nodes is not pciklable
+        instance._session = None  # _session is not pciklable
         with open(os.path.join(model_path, self._instance_file_name), 'wb') as pickle_file:
             pickle.dump(instance, pickle_file)
 
