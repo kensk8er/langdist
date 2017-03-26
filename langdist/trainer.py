@@ -58,7 +58,8 @@ def main():
     """Command line interface for performing various trainings."""
     args = docopt(__doc__)
     _LOGGER.info('Configuration:\n{}'.format(args))
-    paragraphs = load_corpus(args['<locale>']) if args['<locale>'] else args['<new-locale>']
+    paragraphs = load_corpus(args['<locale>']) if args['<locale>'] \
+        else load_corpus(args['<new-locale>'])
     train_args = {'paragraphs': paragraphs}
     if args['--patience']:
         train_args['patience'] = int(args['--patience'])
