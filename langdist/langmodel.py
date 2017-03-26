@@ -377,7 +377,7 @@ class CharLSTM(object):
         if prompts:
             assert sample_num == len(prompts), 'sample_num != len(prompts)'
             for paragraph_id, prompt in enumerate(prompts):
-                paragraphs[paragraph_id].append(self._encode_chars([prompt])[0])
+                paragraphs[paragraph_id].append(self._encode_chars([prompt], fit=False)[0])
 
         X, seq_lens = self._add_padding(paragraphs)
         paragraph_ids = list(range(sample_num))  # IDs of paragraphs to still sample
