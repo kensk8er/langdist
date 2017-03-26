@@ -54,9 +54,8 @@ class CharLSTM(object):
         self._paragraph_border_id = encoder.paragraph_border_id if encoder else None
         self._session = None
 
-    def train(self, paragraphs, model_path, batch_size=64, patience=30000, max_iteration=1000000,
-              stat_interval=50, valid_intervals=None, summary_interval=100, valid_size=0.1,
-              valid_batch_num=10):
+    def train(self, paragraphs, model_path, batch_size=64, patience=400000, stat_interval=50,
+              valid_intervals=None, summary_interval=100, valid_size=0.1, valid_batch_num=10):
         """Train a language model on the paragraphs of word IDs."""
 
         def add_metric_summary(summary_writer, mode, iteration, perplexity):
@@ -154,8 +153,8 @@ class CharLSTM(object):
                     losses = list()
                     add_metric_summary(summary_writer, 'train', iteration, perplexity)
 
-                if iteration > max_iteration or iteration > patience:
-                    _LOGGER.info('Iteration is more than max_iteration/patience, finish training.')
+                if iteration > patience:
+                    _LOGGER.info('Iteration is more than patience, finish training.')
                     break
 
         _LOGGER.info('Finished fitting the model.')
