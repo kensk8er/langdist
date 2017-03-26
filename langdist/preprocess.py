@@ -41,10 +41,6 @@ def preprocess_corpus(locale):
         pickle.dump(corpus, processed_file)
 
 
-if __name__ == '__main__':
-    preprocess_corpus('en')
-
-
 def load_corpus(locale):
     """Load corpus for the locale and return paragraphs (list of paragraphs (str))."""
     processed_corpus_path = os.path.join(CORPUS_DIR, '{}.pkl'.format(locale))
