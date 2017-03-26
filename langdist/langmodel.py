@@ -29,6 +29,7 @@ class CharLSTM(object):
     _random_state = 0  # this is to make train/test split always return the same split
     _checkpoint_file_name = 'model.ckpt'
     _instance_file_name = 'instance.pkl'
+    _tensorboard_dir = 'tensorboard.log'
 
     def __init__(self, embedding_size=128, rnn_size=256, num_rnn_layers=2, learning_rate=0.003,
                  rnn_dropouts=None, final_dropout=0.5, encoder=None):
@@ -46,23 +47,23 @@ class CharLSTM(object):
         self._final_dropout = final_dropout
         self._nodes = None
         self._graph = None
-        self._vocab_size = None
+        self._vocab_size = encoder.vocab_size if encoder else None
         self._encoder = encoder if encoder else CharEncoder()
         self._num_params = None
-        self._paragraph_border = None
-        self._paragraph_border_id = None
+        self._paragraph_border = encoder.paragraph_border if encoder else None
+        self._paragraph_border_id = encoder.paragraph_border_id if encoder else None
         self._session = None
 
     def train(self, paragraphs, model_path, batch_size=64, patience=30000, max_iteration=1000000,
-              stat_interval=50, valid_interval=300, summary_interval=100,
-              sample_interval=300, valid_size=0.1, valid_batch_num=10):
+              stat_interval=50, valid_intervals=None, summary_interval=100, valid_size=0.1,
+              valid_batch_num=10):
         """Train a language model on the paragraphs of word IDs."""
 
-        def add_metric_summary(summary_writer, mode, batch_id, perplexity):
+        def add_metric_summary(summary_writer, mode, iteration, perplexity):
             """Add summary for metric."""
             metric_summary = tf.Summary()
             metric_summary.value.add(tag='{}_perplexity'.format(mode), simple_value=perplexity)
-            summary_writer.add_summary(metric_summary, global_step=batch_id)
+            summary_writer.add_summary(metric_summary, global_step=iteration)
 
         def validate(X_valid, Y_valid, seq_lens_valid, batch_id, best_perplexity, summary_writer):
             """Validate the model on validation set."""
@@ -80,10 +81,10 @@ class CharLSTM(object):
                 valid_losses.append(valid_loss)
 
             valid_loss = np.mean(valid_losses, dtype=np.float64)
-            perplexity = np.exp(np.mean(valid_loss))
+            perplexity = np.exp(np.mean(valid_loss))  # cross entropy is log-perplexity
             _LOGGER.info('Epoch={}, Iter={:,}, Mean Perplexity (Validation set)= {:.3f}'
                          .format(epoch, iteration, perplexity))
-            add_metric_summary(summary_writer, 'valid', batch_id, perplexity)
+            add_metric_summary(summary_writer, 'valid', iteration, perplexity)
 
             if perplexity < best_perplexity:
                 _LOGGER.info('Best perplexity so far, save the model.')
@@ -93,6 +94,11 @@ class CharLSTM(object):
             return best_perplexity
 
         X = self._encode_chars(paragraphs, fit=True)
+        # in order to avoid using mutable object as a default argument
+        if valid_intervals is None:
+            # make the interval trice longer up to 2**9 = 512
+            valid_intervals = [2**i for i in range(10)]
+
         X_train, X_valid = train_test_split(
             X, random_state=self._random_state, test_size=valid_size)
 
@@ -108,18 +114,25 @@ class CharLSTM(object):
         # Launch the graph
         with tf.Session(graph=self._graph) as session:
             summary_writer = tf.summary.FileWriter(
-                os.path.join(model_path, 'tensorboard.log'), session.graph)
+                os.path.join(model_path, self._tensorboard_dir), session.graph)
             _LOGGER.info('Start fitting a model...')
             session.run(nodes['init'])
             losses = list()
+            iteration = 0
+            valid_interval = valid_intervals.pop(0)
 
             for batch_id, X_batch in enumerate(train_batch_generator):
-                iteration = batch_id * batch_size
                 epoch = 1 + iteration // train_size
 
-                if iteration > max_iteration or iteration > patience:
-                    _LOGGER.info('Iteration is more than max_iteration/patience, finish training.')
-                    break
+                if batch_id % valid_interval == 0:
+                    best_perplexity = validate(
+                        X_valid, Y_valid, seq_lens_valid, batch_id, best_perplexity, summary_writer)
+                    self._sample(session)
+                    valid_interval = valid_intervals.pop(0) if valid_intervals else valid_interval
+
+                if batch_id % summary_interval == 0:
+                    summaries = session.run(nodes['summaries'])
+                    summary_writer.add_summary(summaries, global_step=iteration)
 
                 X_batch, Y_batch = self._create_Y(X_batch)
                 X_batch, Y_batch, seq_lens = self._add_padding(X_batch, Y_batch)
@@ -130,24 +143,18 @@ class CharLSTM(object):
                     feed_dict={nodes['X']: X_batch, nodes['Y']: Y_batch,
                                nodes['seq_lens']: seq_lens, nodes['is_train']: True})
                 losses.append(loss)
+                iteration += batch_size
 
-                if batch_id > 0 and batch_id % stat_interval == 0:
+                if batch_id % stat_interval == 0:
                     perplexity = np.exp(np.mean(losses))  # cross entropy is log-perplexity
                     _LOGGER.info('Epoch={}, Iter={:,}, Mean Perplexity (Training batch)= {:.3f}'
                                  .format(epoch, iteration, perplexity))
                     losses = list()
-                    add_metric_summary(summary_writer, 'train', batch_id, perplexity)
+                    add_metric_summary(summary_writer, 'train', iteration, perplexity)
 
-                if batch_id % valid_interval == 0:
-                    best_perplexity = validate(
-                        X_valid, Y_valid, seq_lens_valid, batch_id, best_perplexity, summary_writer)
-
-                if batch_id > 0 and batch_id % summary_interval == 0:
-                    summaries = session.run(nodes['summaries'])
-                    summary_writer.add_summary(summaries, global_step=batch_id)
-
-                if batch_id > 0 and batch_id % sample_interval == 0:
-                    self._sample(session)
+                if iteration > max_iteration or iteration > patience:
+                    _LOGGER.info('Iteration is more than max_iteration/patience, finish training.')
+                    break
 
         _LOGGER.info('Finished fitting the model.')
         _LOGGER.info('Best perplexity: {:.3f}'.format(best_perplexity))
