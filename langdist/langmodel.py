@@ -93,19 +93,21 @@ class CharLSTM(object):
 
             return best_perplexity
 
-        X = self._encode_chars(paragraphs, fit=True)
         # in order to avoid using mutable object as a default argument
         if valid_intervals is None:
             # make the interval trice longer up to 2**9 = 512
             valid_intervals = [2**i for i in range(10)]
 
+        fit_encoder = False if self._encoder.is_fit() else True
+        X = self._encode_chars(paragraphs, fit=fit_encoder)
         X_train, X_valid = train_test_split(
             X, random_state=self._random_state, test_size=valid_size)
 
         X_valid, Y_valid = self._create_Y(X_valid)
         X_valid, Y_valid, seq_lens_valid = self._add_padding(X_valid, Y_valid)
 
-        self._build_graph()
+        if not self._graph:
+            self._build_graph()
         nodes = self._nodes
         train_size = len(X_train)
         train_batch_generator = BatchGenerator(X_train, batch_size)
@@ -177,6 +179,9 @@ class CharLSTM(object):
         instance._session.run(instance._nodes['init'])
         instance._nodes['saver'].restore(
             instance._session, os.path.join(model_path, instance._checkpoint_file_name))
+
+        # initialize only variables relating to optimizer again such that we can retrain a model
+        instance._session.run(instance._nodes['init_optimizer'])
 
         return instance
 
@@ -267,7 +272,7 @@ class CharLSTM(object):
                 nodes['b_s'] = tf.Variable(tf.random_normal([self._vocab_size]), name='bias')
                 logits = tf.matmul(rnn_outputs, nodes['W_s']) + nodes['b_s']
 
-            with tf.variable_scope('optimizer'):
+            with tf.variable_scope('optimizer') as scope:
                 # reshape the logits back to batch_size * seq_lens such that we can compute mean
                 # loss after masking padding inputs easily by using sequence_loss
                 logits = tf.reshape(logits, [batch_size, max_seq_len, -1])
@@ -275,6 +280,11 @@ class CharLSTM(object):
                 nodes['loss'] = sequence_loss(logits=logits, targets=nodes['Y'], weights=weights)
                 nodes['optimizer'] = tf.train.AdamOptimizer(self._learning_rate).minimize(
                     nodes['loss'])
+
+                # initialize variables relating to the optimizer
+                nodes['init_optimizer'] = tf.variables_initializer(
+                    tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope.name),
+                    name='init_optimizer')
 
             with tf.variable_scope('outputs'):
                 nodes['Y_prob'] = tf.nn.softmax(logits)
@@ -341,10 +351,7 @@ class CharLSTM(object):
     def _encode_chars(self, paragraphs, fit):
         """Convert paragraphs of characters into encoded characters (character IDs)."""
         if fit:
-            if self._encoder.is_fit():
-                encoded_paragraphs = self._encoder.encode(paragraphs)
-            else:
-                encoded_paragraphs = self._encoder.fit_encode(paragraphs)
+            encoded_paragraphs = self._encoder.fit_encode(paragraphs)
             self._vocab_size = self._encoder.vocab_size
             self._paragraph_border = self._encoder.paragraph_border
             self._paragraph_border_id = self._encoder.paragraph_border_id
