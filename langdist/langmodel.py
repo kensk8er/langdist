@@ -34,6 +34,7 @@ class CharLSTM(object):
                  rnn_dropouts=None, final_dropout=0.5, encoder=None):
         # in order to avoid using mutable object as a default argument
         if rnn_dropouts is None:
+            # default is 1.0, which means no dropout
             rnn_dropouts = [1.0 for _ in range(num_rnn_layers)]
         assert len(rnn_dropouts) == num_rnn_layers, 'len(rnn_dropouts) != num_rnn_layers'
 
