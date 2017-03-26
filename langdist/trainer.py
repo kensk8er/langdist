@@ -23,7 +23,7 @@ from docopt import docopt
 
 from langdist import langmodel
 from langdist.constant import MODEL_DIR
-from langdist.encoder import get_polyglot_encoder
+from langdist.encoder import get_polyglot_encoder, CharEncoder
 from langdist.langmodel import CharLSTM
 from langdist.util import get_logger
 from langdist.preprocess import load_corpus
@@ -60,7 +60,11 @@ def main():
     _LOGGER.info('Configuration:\n{}'.format(args))
     paragraphs = load_corpus(args['<locale>']) if args['<locale>'] \
         else load_corpus(args['<new-locale>'])
-    train_args = {'paragraphs': paragraphs}
+    valid_chars = CharEncoder().fit(paragraphs).chars
+    train_args = {
+        'paragraphs': paragraphs,
+        'valid_chars': valid_chars,
+    }
     if args['--patience']:
         train_args['patience'] = int(args['--patience'])
 

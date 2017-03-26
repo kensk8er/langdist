@@ -31,6 +31,7 @@ class CharEncoder(object):
         self._label_encoder.fit(characters)
         self.paragraph_border_id = int(self._label_encoder.transform([self.paragraph_border])[0])
         self._fit = True
+        return self
 
     def encode(self, paragraphs):
         encoded_paragraphs = list()
@@ -55,6 +56,10 @@ class CharEncoder(object):
     def is_fit(self):
         """Return True if the encoder is already fit, else False."""
         return self._fit
+
+    @property
+    def chars(self):
+        return list(self._label_encoder.classes_)
 
 
 def fit_polyglot_encoder(model_path=_ENCODER_PATH):

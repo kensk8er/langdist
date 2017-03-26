@@ -53,9 +53,11 @@ class CharLSTM(object):
         self._paragraph_border = encoder.paragraph_border if encoder else None
         self._paragraph_border_id = encoder.paragraph_border_id if encoder else None
         self._session = None
+        self._valid_chars = None
 
     def train(self, paragraphs, model_path, batch_size=64, patience=400000, stat_interval=50,
-              valid_intervals=None, summary_interval=100, valid_size=0.1, valid_batch_num=10):
+              valid_intervals=None, summary_interval=100, valid_size=0.1, valid_batch_num=10,
+              valid_chars=None):
         """Train a language model on the paragraphs of word IDs."""
 
         def add_metric_summary(summary_writer, mode, iteration, perplexity):
@@ -122,6 +124,8 @@ class CharLSTM(object):
         losses = list()
         iteration = 0
         valid_interval = valid_intervals.pop(0)
+        if valid_chars:
+            self._assign_output_mask(session, nodes, valid_chars)
         _LOGGER.info('Start fitting a model...')
 
         # iterate over batches
@@ -251,6 +255,12 @@ class CharLSTM(object):
                     [LSTMStateTuple(initial_states[layer_id][0], initial_states[layer_id][1])
                      for layer_id in range(self._num_rnn_layers)])
 
+                # restrict outputs of the model to valid characters by multiplying a mask tensor
+                nodes['output_mask'] = tf.placeholder(
+                    tf.float32, shape=[self._vocab_size], name='output_mask')
+                output_mask = tf.Variable(tf.ones([self._vocab_size], tf.float32), trainable=False)
+                nodes['assign_output_mask'] = tf.assign(output_mask, nodes['output_mask'])
+
             with tf.name_scope('embedding_layer'):
                 nodes['embeddings'] = tf.Variable(
                     tf.random_uniform([self._vocab_size, self._embedding_size], -1.0, 1.0),
@@ -281,6 +291,9 @@ class CharLSTM(object):
                 # reshape the logits back to batch_size * seq_lens such that we can compute mean
                 # loss after masking padding inputs easily by using sequence_loss
                 logits = tf.reshape(logits, [batch_size, max_seq_len, -1])
+
+                # mask the logits for invalid characters
+                logits = tf.multiply(logits, output_mask)
 
                 nodes['Y_prob'] = tf.nn.softmax(logits)
                 nodes['y_pred'] = tf.argmax(nodes['Y_prob'], axis=2)
@@ -433,3 +446,13 @@ class CharLSTM(object):
             _LOGGER.info('Sampled paragraphs: \n{}'.format('\n'.join(paragraphs)))
 
         return paragraphs
+
+    def _assign_output_mask(self, session, nodes, valid_chars):
+        """
+        Assign output-mask tensor in order to restrict outputs of the model to valid characters.
+        """
+        self._valid_chars = valid_chars
+        valid_char_ids = set(self._encode_chars([valid_chars], fit=False)[0])
+        output_mask = [1. if char_id in valid_char_ids else 0.
+                       for char_id in range(self._vocab_size)]
+        session.run(nodes['assign_output_mask'], feed_dict={nodes['output_mask']: output_mask})
