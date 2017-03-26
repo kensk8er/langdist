@@ -3,12 +3,13 @@
 Command Line Interface for training language models using langdist package.
 
 Usage:
-    trainer.py train <locale>
-    trainer.py retrain <old-locale> <new-locale>
+    trainer.py train <locale> [options]
+    trainer.py retrain <old-locale> <new-locale> [options]
     trainer.py -h | --help
 
 Options:
     -h --help  Show this screen.
+    --patience=<int>  The number of iterations to keep training
 
 Arguments:
     locale  locale of which you want to train a language model (only required for `train` command)
@@ -32,38 +33,40 @@ __author__ = 'kensk8er1017@gmail.com'
 _LOGGER = get_logger(__name__, filename='{}.log'.format(langmodel.__name__))
 
 
-def train(args):
+def train(locale, train_args):
     """Train a new language model for the given locale."""
-    _LOGGER.info('Configuration:\n{}'.format(args))
-    paragraphs = load_corpus(args['<locale>'])
     char_lstm = CharLSTM(encoder=get_polyglot_encoder())
-    model_path = os.path.join(MODEL_DIR, args['<locale>'])
+    model_path = os.path.join(MODEL_DIR, locale)
+    train_args['model_path'] = model_path
     if os.path.exists(model_path):
         shutil.rmtree(model_path)
-    char_lstm.train(paragraphs, model_path=model_path)
+    char_lstm.train(**train_args)
 
 
-def retrain(args):
+def retrain(old_locale, new_locale, train_args):
     """Retrain a language model that was trained for one locale on a new locale."""
-    _LOGGER.info('Configuration:\n{}'.format(args))
-    paragraphs = load_corpus(args['<new-locale>'])
-    old_model_path = os.path.join(MODEL_DIR, args['<old-locale>'])
+    old_model_path = os.path.join(MODEL_DIR, old_locale)
     char_lstm = CharLSTM.load(old_model_path)
-    new_model_path = os.path.join(
-        MODEL_DIR, '{}_{}'.format(args['<old-locale>'], args['<new-locale>']))
+    new_model_path = os.path.join(MODEL_DIR, '{}_{}'.format(old_locale, new_locale))
+    train_args['model_path'] = new_model_path
     if os.path.exists(new_model_path):
         shutil.rmtree(new_model_path)
-    char_lstm.train(paragraphs, model_path=new_model_path)
+    char_lstm.train(**train_args)
 
 
 def main():
     """Command line interface for performing various trainings."""
     args = docopt(__doc__)
+    _LOGGER.info('Configuration:\n{}'.format(args))
+    paragraphs = load_corpus(args['<locale>']) if args['<locale>'] else args['<new-locale>']
+    train_args = {'paragraphs': paragraphs}
+    if args['--patience']:
+        train_args['patience'] = int(args['--patience'])
 
     if args['train']:
-        train(args)
+        train(args['<locale>'], train_args)
     elif args['retrain']:
-        retrain(args)
+        retrain(args['<old-locale>'], args['<new-locale>'], train_args)
 
 
 if __name__ == '__main__':
