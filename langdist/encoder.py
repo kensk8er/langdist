@@ -64,6 +64,9 @@ def fit_polyglot_encoder(model_path=_ENCODER_PATH):
         paragraphs.extend(load_corpus(locale))
     encoder = CharEncoder()
     encoder.fit(paragraphs)
+
+    if not os.path.exists(MODEL_DIR):
+        os.mkdir(MODEL_DIR)
     with open(model_path, 'wb') as model_file:
         pickle.dump(encoder, model_file)
 
