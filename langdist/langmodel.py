@@ -289,7 +289,8 @@ class CharLSTM(object):
 
             # generate summaries
             for variable in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
-                tf.summary.histogram(variable.name, variable)
+                # having ":" in the name is illegal, so replace to "/"
+                tf.summary.histogram(variable.name.replace(':', '/'), variable)
             nodes['summaries'] = tf.summary.merge_all()
 
             # save the model to checkpoint
