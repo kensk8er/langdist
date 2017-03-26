@@ -292,8 +292,8 @@ class CharLSTM(object):
                 # loss after masking padding inputs easily by using sequence_loss
                 logits = tf.reshape(logits, [batch_size, max_seq_len, -1])
 
-                # mask the logits for invalid characters
-                logits = tf.multiply(logits, output_mask)
+                # mask the logits for invalid characters (make values for invalid characters -inf)
+                logits = tf.subtract(logits, output_mask)
 
                 nodes['Y_prob'] = tf.nn.softmax(logits)
                 nodes['y_pred'] = tf.argmax(nodes['Y_prob'], axis=2)
@@ -453,6 +453,6 @@ class CharLSTM(object):
         """
         self._valid_chars = valid_chars
         valid_char_ids = set(self._encode_chars([valid_chars], fit=False)[0])
-        output_mask = [1. if char_id in valid_char_ids else 0.
+        output_mask = [0. if char_id in valid_char_ids else float('inf')
                        for char_id in range(self._vocab_size)]
         session.run(nodes['assign_output_mask'], feed_dict={nodes['output_mask']: output_mask})
