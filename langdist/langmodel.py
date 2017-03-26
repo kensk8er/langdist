@@ -278,10 +278,14 @@ class CharLSTM(object):
                 nodes['b_s'] = tf.Variable(tf.random_normal([self._vocab_size]), name='bias')
                 logits = tf.matmul(rnn_outputs, nodes['W_s']) + nodes['b_s']
 
-            with tf.variable_scope('optimizer') as scope:
                 # reshape the logits back to batch_size * seq_lens such that we can compute mean
                 # loss after masking padding inputs easily by using sequence_loss
                 logits = tf.reshape(logits, [batch_size, max_seq_len, -1])
+
+                nodes['Y_prob'] = tf.nn.softmax(logits)
+                nodes['y_pred'] = tf.argmax(nodes['Y_prob'], axis=2)
+
+            with tf.variable_scope('optimizer') as scope:
                 weights = tf.cast(tf.sequence_mask(nodes['seq_lens'], max_seq_len), tf.float32)
                 nodes['loss'] = sequence_loss(logits=logits, targets=nodes['Y'], weights=weights)
                 nodes['optimizer'] = tf.train.AdamOptimizer(self._learning_rate).minimize(
@@ -291,10 +295,6 @@ class CharLSTM(object):
                 nodes['init_optimizer'] = tf.variables_initializer(
                     tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope.name),
                     name='init_optimizer')
-
-            with tf.variable_scope('outputs'):
-                nodes['Y_prob'] = tf.nn.softmax(logits)
-                nodes['y_pred'] = tf.argmax(nodes['Y_prob'], axis=2)
 
             # initialize the variables
             nodes['init'] = tf.global_variables_initializer()
