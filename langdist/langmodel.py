@@ -50,6 +50,7 @@ class CharLSTM(object):
         self._num_params = None
         self._paragraph_border = None
         self._paragraph_border_id = None
+        self._session = None
 
     def train(self, paragraphs, model_path, batch_size=64, patience=30000, max_iteration=1000000,
               stat_interval=50, valid_interval=300, summary_interval=100,
@@ -149,6 +150,31 @@ class CharLSTM(object):
 
         _LOGGER.info('Finished fitting the model.')
         _LOGGER.info('Best perplexity: {:.3f}'.format(best_perplexity))
+
+    @classmethod
+    def load(cls, model_path):
+        """
+        Load the model from the saved model directory.
+
+        :param model_path: path to the model directory you want to load the model from.
+        :return: instance of the model
+        """
+        # load the instance, set _model_path appropriately
+        with open(os.path.join(model_path, cls._instance_file_name), 'rb') as model_file:
+            instance = pickle.load(model_file)
+
+        # build the graph and restore the session
+        instance._build_graph()
+        instance._session = tf.Session(graph=instance._graph)
+        instance._session.run(instance._nodes['init'])
+        instance._nodes['saver'].restore(
+            instance._session, os.path.join(model_path, instance._checkpoint_file_name))
+
+        return instance
+
+    def sample(self, sample_num=10, prompts=None, pick_top_k=10, max_char_len=300, log=False):
+        """Sample paragraphs using a trained model running on the given session."""
+        return self._sample(self._session, sample_num, prompts, pick_top_k, max_char_len, log)
 
     def _save(self, model_path, session):
         """Save the tensorflow session and the instance object of this Python class."""
@@ -324,7 +350,8 @@ class CharLSTM(object):
         """Convert paragraphs of encoded character IDs into decoded characters."""
         return self._encoder.decode(paragraphs)
 
-    def _sample(self, session, sample_num=10, prompts=None, pick_top_k=10, max_char_len=300):
+    def _sample(self, session, sample_num=10, prompts=None, pick_top_k=10, max_char_len=300,
+                log=True):
         """Sample paragraphs using a trained model running on the given session."""
 
         def sample_chars_from_probs(Y_prob):
@@ -381,5 +408,9 @@ class CharLSTM(object):
             X, seq_lens = self._add_padding(X)
 
         paragraphs = self._decode_chars(paragraphs)
-        _LOGGER.info('Sampled paragraphs: \n{}'
-                     .format('\n'.join(map(lambda x: x.strip(), paragraphs))))
+        paragraphs = [paragraph.strip() for paragraph in paragraphs]
+
+        if log:
+            _LOGGER.info('Sampled paragraphs: \n{}'.format('\n'.join(paragraphs)))
+
+        return paragraphs
