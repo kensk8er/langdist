@@ -2,7 +2,7 @@
 """
 This module implements language modeling algorithms.
 """
-from copy import deepcopy, copy
+from copy import copy
 import os
 import pickle
 from math import ceil
@@ -307,7 +307,6 @@ class CharLSTM(object):
         :param Y: list of sequences of word IDs
         :return: padded list of sequences of word IDs and list of sequence length before padding
         """
-        X = deepcopy(X)
         max_len = max(len(x) for x in X)
         seq_lens = list()
 
@@ -318,7 +317,6 @@ class CharLSTM(object):
                 x.extend([self._padding_id for _ in range(pad_len)])
             return X, seq_lens
 
-        Y = deepcopy(Y)
         for x, y in zip(X, Y):
             seq_lens.append(len(x))
             pad_len = max_len - len(x)
@@ -331,7 +329,6 @@ class CharLSTM(object):
         Create Y (correct character sequences) based on X (input character sequences). Also prepend
         the paragraph border character to X (in order to learn the beginning of a paragraph).
         """
-        X = deepcopy(X)
         Y = list()
         for x in X:
             y = copy(x)

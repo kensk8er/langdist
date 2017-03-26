@@ -56,13 +56,13 @@ class BatchGenerator(object):
         end_index = ((batch_id + 1) * batch_size) % data_size
 
         if start_index < end_index:
-            return X[start_index: end_index]
+            return deepcopy(X[start_index: end_index])
         else:  # executing here means you have gone over X and y already
-            X_first = X[start_index:]
+            X_first = deepcopy(X[start_index:])
 
             # shuffle X and y after going over them if shuffle is True
             if self._shuffle:
                 shuffle(X)
 
-            X_second = X[:end_index]
+            X_second = deepcopy(X[:end_index])
             return X_first + X_second
