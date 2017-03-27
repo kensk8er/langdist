@@ -34,7 +34,8 @@ def preprocess_corpus(locale):
     parser = CorpusParser(locale)
     for paragraph in parser.gen_paragraphs():
         paragraph = _preprocess(paragraph, locale)
-        corpus.append(paragraph)
+        if paragraph:
+            corpus.append(paragraph)
 
     processed_filepath = os.path.join(CORPUS_DIR, '{}.pkl'.format(locale))
     with open(processed_filepath, 'wb') as processed_file:
