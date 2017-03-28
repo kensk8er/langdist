@@ -50,7 +50,7 @@ def preprocess_corpus(locale):
                 corpus.append(paragraph)
             elif isinstance(paragraph, list):
                 for sentence in paragraph:
-                    if sentence:
+                    if sentence and len(sentence) < _MAX_PARAGRAPH_LEN:
                         corpus.append(sentence)
             else:
                 raise InvalidParagraphException('paragraph is not str or list.')
