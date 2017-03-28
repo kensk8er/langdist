@@ -12,6 +12,9 @@ from langdist.constant import CORPUS_DIR
 
 __author__ = 'kensk8er1017@gmail.com'
 
+_SENTENCE_BORDER_REGEX = regex.compile(r'[\.。．!?！？]')
+_MAX_PARAGRAPH_LEN = 500
+
 
 def _preprocess(paragraph, locale):
     """Preprocess a paragraph."""
@@ -21,7 +24,15 @@ def _preprocess(paragraph, locale):
     if locale == 'zh':
         paragraph = regex.sub(r'\s', '', paragraph)
 
+    # split into sentences if a paragraph is too long (in order to avoid extremely long run time)
+    if len(paragraph) > _MAX_PARAGRAPH_LEN:
+        paragraph = _SENTENCE_BORDER_REGEX.split(paragraph)
+
     return paragraph
+
+
+class InvalidParagraphException(BaseException):
+    pass
 
 
 def preprocess_corpus(locale):
@@ -35,7 +46,13 @@ def preprocess_corpus(locale):
     for paragraph in parser.gen_paragraphs():
         paragraph = _preprocess(paragraph, locale)
         if paragraph:
-            corpus.append(paragraph)
+            if isinstance(paragraph, str):
+                corpus.append(paragraph)
+            elif isinstance(paragraph, list):
+                for sentence in paragraph:
+                    corpus.append(sentence)
+            else:
+                raise InvalidParagraphException('paragraph is not str or list.')
 
     processed_filepath = os.path.join(CORPUS_DIR, '{}.pkl'.format(locale))
     with open(processed_filepath, 'wb') as processed_file:
