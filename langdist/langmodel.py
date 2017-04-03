@@ -5,6 +5,7 @@ This module implements language modeling algorithms.
 from copy import copy
 import os
 import pickle
+from itertools import chain
 from math import ceil
 
 import numpy as np
@@ -53,6 +54,7 @@ class CharLSTM(object):
         self._paragraph_border = encoder.paragraph_border if encoder else None
         self._paragraph_border_id = encoder.paragraph_border_id if encoder else None
         self._session = None
+        self._target_vocab_ids = None
 
     def train(self, paragraphs, model_path, batch_size=64, patience=400000, stat_interval=50,
               valid_intervals=None, summary_interval=100, valid_size=0.1, valid_batch_num=10):
@@ -100,6 +102,7 @@ class CharLSTM(object):
         retrain = True if self._session else False
         fit_encoder = False if self._encoder.is_fit() else True
         X = self._encode_chars(paragraphs, fit=fit_encoder)
+        self._set_target_vocabs(X)
         X_train, X_valid = train_test_split(
             X, random_state=self._random_state, test_size=valid_size)
 
@@ -165,6 +168,12 @@ class CharLSTM(object):
 
         # close the session
         session.close()
+
+    def _set_target_vocabs(self, X):
+        """Set target vocabulary IDs from word IDs of paragraphs."""
+        target_vocab_ids = set(chain.from_iterable(X))
+        target_vocab_ids.add(self._paragraph_border_id)
+        self._target_vocab_ids = list(target_vocab_ids)
 
     @classmethod
     def load(cls, model_path):
@@ -276,18 +285,36 @@ class CharLSTM(object):
                 nodes['W_s'] = tf.Variable(
                     tf.random_normal([self._rnn_size, self._vocab_size]), name='weight')
                 nodes['b_s'] = tf.Variable(tf.random_normal([self._vocab_size]), name='bias')
-                logits = tf.matmul(rnn_outputs, nodes['W_s']) + nodes['b_s']
 
-                # reshape the logits back to batch_size * seq_lens such that we can compute mean
-                # loss after masking padding inputs easily by using sequence_loss
+                # use the subset of W/b that correspond to target vocabulary
+                target_vocabs = tf.constant([id_ for id_ in self._target_vocab_ids], dtype=tf.int32)
+                W_s = tf.transpose(
+                    tf.gather(tf.transpose(nodes['W_s'], [1, 0]), target_vocabs), [1, 0])
+                b_s = tf.gather(nodes['b_s'], target_vocabs)
+                logits = tf.matmul(rnn_outputs, W_s) + b_s
+
+                # reshape the logits back to batch_size * seq_lens * vocab_size such that we can
+                # compute mean loss after masking padding inputs easily by using sequence_loss
                 logits = tf.reshape(logits, [batch_size, max_seq_len, -1])
 
-                nodes['Y_prob'] = tf.nn.softmax(logits)
-                nodes['y_pred'] = tf.argmax(nodes['Y_prob'], axis=2)
+                # convert back to original vocab_ids, add 0. probability for the other vocabs
+                nodes['Y_prob'] = tf.transpose(tf.scatter_nd(
+                    indices=tf.expand_dims(target_vocabs, axis=1),
+                    updates=tf.transpose(tf.nn.softmax(logits), [2, 0, 1]),
+                    shape=[self._vocab_size, batch_size, max_seq_len]), [1, 2, 0])
+                nodes['Y_pred'] = tf.argmax(nodes['Y_prob'], axis=2)
 
             with tf.variable_scope('optimizer') as scope:
+                # weights for sequence_loss, all 1 for actual entries and 0 for paddings
                 weights = tf.cast(tf.sequence_mask(nodes['seq_lens'], max_seq_len), tf.float32)
-                nodes['loss'] = sequence_loss(logits=logits, targets=nodes['Y'], weights=weights)
+
+                # convert from original vocab_id to target_vocab_id in order to compute loss
+                orig_id2target_id = tf.constant(
+                    [self._target_vocab_ids.index(id_) if id_ in self._target_vocab_ids else 0
+                     for id_ in range(self._vocab_size)], dtype=tf.int32)
+                target_Y = tf.nn.embedding_lookup(orig_id2target_id, nodes['Y'])
+
+                nodes['loss'] = sequence_loss(logits=logits, targets=target_Y, weights=weights)
                 nodes['optimizer'] = tf.train.AdamOptimizer(self._learning_rate).minimize(
                     nodes['loss'])
 
