@@ -7,8 +7,9 @@ import pickle
 
 import regex
 
+from langdist.transliterator import get_transliterator
 from langdist.util import CorpusParser
-from langdist.constant import CORPUS_DIR, LOCALES
+from langdist.constant import CORPUS_DIR, NON_ALPHABET_LOCALES, TRANSLITERATION_CODE
 
 __author__ = 'kensk8er1017@gmail.com'
 
@@ -59,6 +60,14 @@ def preprocess_corpus(locale):
     processed_filepath = os.path.join(CORPUS_DIR, '{}.pkl'.format(locale))
     with open(processed_filepath, 'wb') as processed_file:
         pickle.dump(corpus, processed_file)
+
+    if locale in NON_ALPHABET_LOCALES:
+        transliterator = get_transliterator(locale)
+        transliterated_corpus = transliterator.transliterate_corpus(corpus)
+        transliterated_filepath = os.path.join(
+            CORPUS_DIR, '{}-{}.pkl'.format(locale, TRANSLITERATION_CODE))
+        with open(transliterated_filepath, 'wb') as processed_file:
+            pickle.dump(transliterated_corpus, processed_file)
 
 
 def load_corpus(locale):
