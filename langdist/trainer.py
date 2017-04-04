@@ -10,6 +10,7 @@ Usage:
 Options:
     -h --help  Show this screen.
     --patience=<int>  The number of iterations to keep training
+    --profile  Profile the training (profile_train/valid.json will be created)
 
 Arguments:
     locale  locale of which you want to train a language model (only required for `train` command)
@@ -60,7 +61,7 @@ def main():
     _LOGGER.info('Configuration:\n{}'.format(args))
     paragraphs = load_corpus(args['<locale>']) if args['<locale>'] \
         else load_corpus(args['<new-locale>'])
-    train_args = {'paragraphs': paragraphs}
+    train_args = {'paragraphs': paragraphs, 'profile': args['--profile']}
     if args['--patience']:
         train_args['patience'] = int(args['--patience'])
 

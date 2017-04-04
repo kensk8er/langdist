@@ -14,6 +14,7 @@ from sklearn.model_selection import train_test_split
 from tensorflow.contrib.rnn import DropoutWrapper, LSTMCell, MultiRNNCell
 from tensorflow.contrib.rnn import LSTMStateTuple
 from tensorflow.contrib.seq2seq import sequence_loss
+from tensorflow.python.client import timeline
 
 from langdist.batch import BatchGenerator
 from langdist.encoder import CharEncoder
@@ -57,7 +58,8 @@ class CharLSTM(object):
         self._target_vocab_ids = None
 
     def train(self, paragraphs, model_path, batch_size=64, patience=400000, stat_interval=50,
-              valid_intervals=None, summary_interval=100, valid_size=0.1, valid_batch_num=10):
+              valid_intervals=None, summary_interval=100, valid_size=0.1, valid_batch_num=10,
+              profile=False):
         """Train a language model on the paragraphs of word IDs."""
 
         def add_metric_summary(summary_writer, mode, iteration, perplexity):
@@ -78,7 +80,8 @@ class CharLSTM(object):
                 valid_loss = session.run(
                     nodes['loss'],
                     feed_dict={nodes['X']: X_valid_batch, nodes['Y']: Y_valid_batch,
-                               nodes['seq_lens']: seq_lens_valid_batch, nodes['is_train']: False})
+                               nodes['seq_lens']: seq_lens_valid_batch, nodes['is_train']: False},
+                    options=run_options, run_metadata=run_metadata)
                 valid_losses.append(valid_loss)
 
             valid_loss = np.mean(valid_losses, dtype=np.float64)
@@ -91,6 +94,11 @@ class CharLSTM(object):
                 _LOGGER.info('Best perplexity so far, save the model.')
                 self._save(model_path, session)
                 best_perplexity = perplexity
+
+            if run_metadata:
+                with open('profile_valid.json', 'w') as file_:
+                    file_.write(
+                        timeline.Timeline(run_metadata.step_stats).generate_chrome_trace_format())
 
             return best_perplexity
 
@@ -127,6 +135,10 @@ class CharLSTM(object):
         valid_interval = valid_intervals.pop(0)
         _LOGGER.info('Start fitting a model...')
 
+        # profiler
+        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE) if profile else None
+        run_metadata = tf.RunMetadata() if profile else None
+
         # iterate over batches
         for batch_id, X_batch in enumerate(train_batch_generator):
             epoch = 1 + iteration // train_size
@@ -148,9 +160,15 @@ class CharLSTM(object):
             _, loss = session.run(
                 [nodes['optimizer'], nodes['loss']],
                 feed_dict={nodes['X']: X_batch, nodes['Y']: Y_batch,
-                           nodes['seq_lens']: seq_lens, nodes['is_train']: True})
+                           nodes['seq_lens']: seq_lens, nodes['is_train']: True},
+                options=run_options, run_metadata=run_metadata)
             losses.append(loss)
             iteration += batch_size
+
+            if run_metadata:
+                with open('profile_train.json', 'w') as file_:
+                    file_.write(
+                        timeline.Timeline(run_metadata.step_stats).generate_chrome_trace_format())
 
             if batch_id % stat_interval == 0:
                 perplexity = np.exp(np.mean(losses))  # cross entropy is log-perplexity

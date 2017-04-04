@@ -95,4 +95,6 @@ ENV/
 corpora/*.xml
 corpora/*.pkl
 models
+profile_train.json
+profile_valid.json
 
