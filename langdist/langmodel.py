@@ -57,8 +57,8 @@ class CharLSTM(object):
         self._session = None
         self._target_vocab_ids = None
 
-    def train(self, sentences, model_path, batch_size=64, patience=400000, stat_interval=50,
-              valid_intervals=None, summary_interval=100, valid_size=0.1, valid_batch_num=10,
+    def train(self, sentences, model_path, batch_size=128, patience=819200, stat_interval=25,
+              valid_intervals=None, summary_interval=50, valid_size=0.1, valid_batch_num=10,
               profile=False):
         """Train a language model on the sentences of word IDs."""
 
@@ -104,8 +104,8 @@ class CharLSTM(object):
 
         # in order to avoid using mutable object as a default argument
         if valid_intervals is None:
-            # make the interval trice longer up to 2**9 = 512
-            valid_intervals = [2**i for i in range(10)]
+            # make the interval trice longer up to 2**8 = 256
+            valid_intervals = [2**i for i in range(9)]
 
         retrain = True if self._session else False
         fit_encoder = False if self._encoder.is_fit() else True
