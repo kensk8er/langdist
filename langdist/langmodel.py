@@ -33,7 +33,7 @@ class CharLSTM(object):
     _instance_file_name = 'instance.pkl'
     _tensorboard_dir = 'tensorboard.log'
 
-    def __init__(self, embedding_size=128, rnn_size=256, num_rnn_layers=2, learning_rate=0.003,
+    def __init__(self, embedding_size=128, rnn_size=256, num_rnn_layers=2, learning_rate=0.001,
                  rnn_dropouts=None, final_dropout=0.5, encoder=None):
         # in order to avoid using mutable object as a default argument
         if rnn_dropouts is None:
