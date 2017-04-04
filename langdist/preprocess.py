@@ -31,7 +31,7 @@ def _preprocess(paragraph, locale):
     return paragraph
 
 
-class InvalidParagraphException(BaseException):
+class InvalidParagraphException(Exception):
     pass
 
 
