@@ -18,35 +18,35 @@ _ENCODER_PATH = os.path.join(MODEL_DIR, 'encoder.pkl')
 class CharEncoder(object):
     """Encode characters into character IDs."""
 
-    paragraph_border = '\n'
+    sentence_border = '\n'
 
     def __init__(self):
         self._label_encoder = LabelEncoder()
-        self.paragraph_border_id = None
+        self.sentence_border_id = None
         self._fit = False
 
-    def fit(self, paragraphs):
-        characters = list(''.join(paragraphs))
-        characters.insert(0, self.paragraph_border)
+    def fit(self, sentences):
+        characters = list(''.join(sentences))
+        characters.insert(0, self.sentence_border)
         self._label_encoder.fit(characters)
-        self.paragraph_border_id = int(self._label_encoder.transform([self.paragraph_border])[0])
+        self.sentence_border_id = int(self._label_encoder.transform([self.sentence_border])[0])
         self._fit = True
 
-    def encode(self, paragraphs):
-        encoded_paragraphs = list()
-        for paragraph in paragraphs:
-            encoded_paragraphs.append(self._label_encoder.transform(list(paragraph)).tolist())
-        return encoded_paragraphs
+    def encode(self, sentences):
+        encoded_sentences = list()
+        for sentence in sentences:
+            encoded_sentences.append(self._label_encoder.transform(list(sentence)).tolist())
+        return encoded_sentences
 
-    def decode(self, paragraphs):
-        decoded_paragraphs = list()
-        for paragraph in paragraphs:
-            decoded_paragraphs.append(''.join(self._label_encoder.inverse_transform(paragraph)))
-        return decoded_paragraphs
+    def decode(self, sentences):
+        decoded_sentences = list()
+        for sentence in sentences:
+            decoded_sentences.append(''.join(self._label_encoder.inverse_transform(sentence)))
+        return decoded_sentences
 
-    def fit_encode(self, paragraphs):
-        self.fit(paragraphs)
-        return self.encode(paragraphs)
+    def fit_encode(self, sentences):
+        self.fit(sentences)
+        return self.encode(sentences)
 
     @property
     def vocab_size(self):
@@ -59,11 +59,11 @@ class CharEncoder(object):
 
 def fit_polyglot_encoder(model_path=_ENCODER_PATH):
     """Fit an encoder to all the locales and save it."""
-    paragraphs = list()
+    sentences = list()
     for locale in LOCALES:
-        paragraphs.extend(load_corpus(locale))
+        sentences.extend(load_corpus(locale))
     encoder = CharEncoder()
-    encoder.fit(paragraphs)
+    encoder.fit(sentences)
 
     if not os.path.exists(MODEL_DIR):
         os.mkdir(MODEL_DIR)

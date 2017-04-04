@@ -8,31 +8,38 @@ import pickle
 import regex
 
 from langdist.util import CorpusParser
-from langdist.constant import CORPUS_DIR
+from langdist.constant import CORPUS_DIR, LOCALES
 
 __author__ = 'kensk8er1017@gmail.com'
 
-_SENTENCE_BORDER_REGEX = regex.compile(r'[\.。．!?！？]')
-_MAX_PARAGRAPH_LEN = 500
+_SENTENCE_BORDER_REGEX = regex.compile(r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\!|\?)\s')
+_SENTENCE_BORDER_REGEX_ZH = regex.compile(r'\.|\?|\!|。|．|！|？')
+_MAX_SENTENCE_LEN = 500
+
+
+def _sent_tokenize(paragraph, locale):
+    """Tokenize paragraph into sentences using a simple regex rule."""
+    if locale in ['zh', 'ja']:
+        index = 0
+        sentences = list()
+        for match in _SENTENCE_BORDER_REGEX_ZH.finditer(paragraph):
+            sentences.append(paragraph[index: match.end(0)])
+            index = match.end(0)
+
+        if index < len(paragraph):
+            sentences.append(paragraph[index:])
+        return sentences
+    else:
+        return _SENTENCE_BORDER_REGEX.split(paragraph)
 
 
 def _preprocess(paragraph, locale):
-    """Preprocess a paragraph."""
-    paragraph = paragraph.strip()
-
+    """Preprocess corpus text."""
     # for some reason, zh text has white spaces between characters, which isn't normal for zh texts
     if locale == 'zh':
         paragraph = regex.sub(r'\s', '', paragraph)
 
-    # split into sentences if a paragraph is too long (in order to avoid extremely long run time)
-    if len(paragraph) > _MAX_PARAGRAPH_LEN:
-        paragraph = _SENTENCE_BORDER_REGEX.split(paragraph)
-
-    return paragraph
-
-
-class InvalidParagraphException(Exception):
-    pass
+    return (sentence.strip() for sentence in _sent_tokenize(paragraph, locale))
 
 
 def preprocess_corpus(locale):
@@ -44,16 +51,10 @@ def preprocess_corpus(locale):
     corpus = list()
     parser = CorpusParser(locale)
     for paragraph in parser.gen_paragraphs():
-        paragraph = _preprocess(paragraph, locale)
-        if paragraph:
-            if isinstance(paragraph, str):
-                corpus.append(paragraph)
-            elif isinstance(paragraph, list):
-                for sentence in paragraph:
-                    if sentence and len(sentence) < _MAX_PARAGRAPH_LEN:
-                        corpus.append(sentence)
-            else:
-                raise InvalidParagraphException('paragraph is not str or list.')
+        sentences = _preprocess(paragraph, locale)
+        for sentence in sentences:
+            if sentence and len(sentence) < _MAX_SENTENCE_LEN:
+                corpus.append(sentence)
 
     processed_filepath = os.path.join(CORPUS_DIR, '{}.pkl'.format(locale))
     with open(processed_filepath, 'wb') as processed_file:
@@ -61,12 +62,12 @@ def preprocess_corpus(locale):
 
 
 def load_corpus(locale):
-    """Load corpus for the locale and return paragraphs (list of paragraphs (str))."""
+    """Load corpus for the locale and return sentences (list of sentences (str))."""
     processed_corpus_path = os.path.join(CORPUS_DIR, '{}.pkl'.format(locale))
 
     if not os.path.exists(processed_corpus_path):
         preprocess_corpus(locale)
 
     with open(processed_corpus_path, 'rb') as corpus_file:
-        paragraphs = pickle.load(corpus_file)
-    return paragraphs
+        sentences = pickle.load(corpus_file)
+    return sentences
