@@ -9,7 +9,7 @@ wget -O corpora/de.xml https://raw.githubusercontent.com/christos-c/bible-corpus
 wget -O corpora/pt.xml https://raw.githubusercontent.com/christos-c/bible-corpus/master/bibles/Portuguese.xml
 #wget -O corpora/ru.xml https://raw.githubusercontent.com/christos-c/bible-corpus/master/bibles/Russian.xml
 wget -O corpora/ar.xml https://raw.githubusercontent.com/christos-c/bible-corpus/master/bibles/Arabic.xml
-wget -O corpora/ind.xml https://raw.githubusercontent.com/christos-c/bible-corpus/master/bibles/Indonesian.xml
+wget -O corpora/id.xml https://raw.githubusercontent.com/christos-c/bible-corpus/master/bibles/Indonesian.xml
 #wget -O corpora/ko.xml https://raw.githubusercontent.com/christos-c/bible-corpus/master/bibles/Korean.xml
 #wget -O corpora/hi.xml https://raw.githubusercontent.com/christos-c/bible-corpus/master/bibles/Hindi.xml
 #wget -O corpora/tr.xml https://raw.githubusercontent.com/christos-c/bible-corpus/master/bibles/Turkish.xml
