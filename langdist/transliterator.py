@@ -18,9 +18,14 @@ class BaseTransliterator(metaclass=ABCMeta):
     def transliterate(self, text: str) -> str:
         pass
 
-    @abstractmethod
     def transliterate_corpus(self, corpus: list) -> list:
-        pass
+        """
+        Transliterate a non-alphabetic corpus into Latin alphabets.
+
+        :param corpus: list of sentences in original scripts
+        :return: transliterated corpus
+        """
+        return [self.transliterate(sentence) for sentence in corpus]
 
 
 class JapaneseTransliterator(BaseTransliterator):
@@ -62,15 +67,6 @@ class JapaneseTransliterator(BaseTransliterator):
                 text = text.replace(invalid_char, '')
             return self._converter.do(text)
 
-    def transliterate_corpus(self, corpus: list) -> list:
-        """
-        Transliterate Japanese corpus into Latin alphabets.
-
-        :param corpus: list of Japanese sentences
-        :return: transliterated corpus
-        """
-        return [self.transliterate(sentence) for sentence in corpus]
-
 
 class ChineseTransliterator(BaseTransliterator):
     """Transliterate Chinese corpus into Latin alphabets (pinyin)."""
@@ -110,14 +106,32 @@ class ChineseTransliterator(BaseTransliterator):
 
         return text
 
-    def transliterate_corpus(self, corpus: list) -> list:
-        """
-        Transliterate Chinese corpus into Latin alphabets.
 
-        :param corpus: list of Chinese sentences
-        :return: transliterated corpus
+class ArabicTransliterator(BaseTransliterator):
+    """
+    Transliterate Arabic corpus into Latin alphabets (Buckwalter's scheme ).
+    C.f. http://www.qamus.org/transliteration.htm
+    """
+    _arabic2alphabet = {
+        'ء': "'", 'آ': '|', 'أ': '?', 'ؤ': '&', 'إ': '<', 'ئ': '}', 'ا': 'A', 'ب': 'b', 'ة': 'p',
+        'ت': 't', 'ث': 'v', 'ج': 'g', 'ح': 'H', 'خ': 'x', 'د': 'd', 'ذ': '*', 'ر': 'r', 'ز': 'z',
+        'س': 's', 'ش': '$', 'ص': 'S', 'ض': 'D', 'ط': 'T', 'ظ': 'Z', 'ع': 'E', 'غ': 'G', 'ـ': '_',
+        'ف': 'f', 'ق': 'q', 'ك': 'k', 'ل': 'l', 'م': 'm', 'ن': 'n', 'ه': 'h', 'و': 'w', 'ى': 'Y',
+        'ي': 'y', 'ً': 'F', 'ٌ': 'N', 'ٍ': 'K', 'َ': 'a', 'ُ': 'u', 'ِ': 'i', 'ّ': '~', 'ْ': 'o'}
+
+    def __init__(self):
+        pass
+
+    def transliterate(self, text: str):
         """
-        return [self.transliterate(sentence) for sentence in corpus]
+        Transliterate Arabic text into Latin alphabets using Buckwalter's scheme.
+
+        :param text: Arabic text
+        :return: transliterated latin alphabets
+        """
+        for arabic, alphabet in self._arabic2alphabet.items():
+            text = text.replace(arabic, alphabet)
+        return text
 
 
 def get_transliterator(locale, **kwargs):
@@ -125,6 +139,7 @@ def get_transliterator(locale, **kwargs):
     locale2transliterator_class = {
         'ja': JapaneseTransliterator,
         'zh': ChineseTransliterator,
+        'ar': ArabicTransliterator,
     }
     if locale not in locale2transliterator_class:
         raise NotImplementedError('Transliterator for locale={} is not implemented.')
