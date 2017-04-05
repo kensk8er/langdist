@@ -91,6 +91,9 @@ ENV/
 # Pycharm
 .idea
 
+# Mac
+.DS_Store
+
 # Project sepecic
 corpora/*.xml
 corpora/*.pkl
