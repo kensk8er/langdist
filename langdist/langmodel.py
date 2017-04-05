@@ -9,6 +9,7 @@ from itertools import chain
 from math import ceil
 
 import numpy as np
+import regex
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from tensorflow.contrib.rnn import DropoutWrapper, LSTMCell, MultiRNNCell
@@ -55,7 +56,6 @@ class CharLSTM(object):
         self._sentence_border = encoder.sentence_border if encoder else None
         self._sentence_border_id = encoder.sentence_border_id if encoder else None
         self._session = None
-        self._target_vocab_ids = None
 
     def train(self, sentences, model_path, batch_size=128, patience=819200, stat_interval=25,
               valid_intervals=None, summary_interval=50, valid_size=0.1, valid_batch_num=10,
@@ -105,12 +105,11 @@ class CharLSTM(object):
         # in order to avoid using mutable object as a default argument
         if valid_intervals is None:
             # make the interval trice longer up to 2**8 = 256
-            valid_intervals = [2**i for i in range(9)]
+            valid_intervals = [2 ** i for i in range(9)]
 
         retrain = True if self._session else False
         fit_encoder = False if self._encoder.is_fit() else True
         X = self._encode_chars(sentences, fit=fit_encoder)
-        self._set_target_vocabs(X)
         X_train, X_valid = train_test_split(
             X, random_state=self._random_state, test_size=valid_size)
 
@@ -133,6 +132,7 @@ class CharLSTM(object):
         losses = list()
         iteration = 0
         valid_interval = valid_intervals.pop(0)
+        self._set_target_vocabs(X, session, nodes)
         _LOGGER.info('Start fitting a model...')
 
         # profiler
@@ -187,11 +187,18 @@ class CharLSTM(object):
         # close the session
         session.close()
 
-    def _set_target_vocabs(self, X):
+    def _set_target_vocabs(self, X, session, nodes):
         """Set target vocabulary IDs from word IDs of sentences."""
         target_vocab_ids = set(chain.from_iterable(X))
         target_vocab_ids.add(self._sentence_border_id)
-        self._target_vocab_ids = list(target_vocab_ids)
+        target_vocab_ids = list(target_vocab_ids)
+        session.run(nodes['assign_target_vocab_ids'],
+                    feed_dict={nodes['target_vocab_ids']: target_vocab_ids})
+
+        orig_id2target_id = [target_vocab_ids.index(id_) if id_ in target_vocab_ids else 0
+                             for id_ in range(self._vocab_size)]
+        session.run(nodes['assign_orig_id2target_id'],
+                    feed_dict={nodes['orig_id2target_id']: orig_id2target_id})
 
     @classmethod
     def load(cls, model_path):
@@ -209,8 +216,17 @@ class CharLSTM(object):
         instance._build_graph()
         instance._session = tf.Session(graph=instance._graph)
         instance._session.run(instance._nodes['init'])
-        instance._nodes['saver'].restore(
-            instance._session, os.path.join(model_path, instance._checkpoint_file_name))
+
+        if hasattr(instance, '_target_vocab_ids'):
+            # this is in order to cope with older code that uses self._target_vocab_ids
+            # TODO: this if clause needs to be removed once we stop using old models
+            instance._set_target_vocabs(
+                [instance._target_vocab_ids], instance._session, instance._nodes)
+            instance._nodes['saver_without_target_vocab_ids'].restore(
+                instance._session, os.path.join(model_path, instance._checkpoint_file_name))
+        else:
+            instance._nodes['saver'].restore(
+                instance._session, os.path.join(model_path, instance._checkpoint_file_name))
 
         # initialize only variables relating to optimizer again such that we can retrain a model
         instance._session.run(instance._nodes['init_optimizer'])
@@ -278,6 +294,17 @@ class CharLSTM(object):
                     [LSTMStateTuple(initial_states[layer_id][0], initial_states[layer_id][1])
                      for layer_id in range(self._num_rnn_layers)])
 
+                target_vocab_ids = tf.Variable(
+                    [], dtype=tf.int32, trainable=False, validate_shape=False)
+                nodes['target_vocab_ids'] = tf.placeholder(tf.int32, name='target_vocab_ids')
+                nodes['assign_target_vocab_ids'] = tf.assign(
+                    target_vocab_ids, nodes['target_vocab_ids'], validate_shape=False)
+
+                orig_id2target_id = tf.Variable([], dtype=tf.int32, trainable=False)
+                nodes['orig_id2target_id'] = tf.placeholder(tf.int32, name='orig_id2target_id')
+                nodes['assign_orig_id2target_id'] = tf.assign(
+                    orig_id2target_id, nodes['orig_id2target_id'], validate_shape=False)
+
             with tf.name_scope('embedding_layer'):
                 nodes['embeddings'] = tf.Variable(
                     tf.random_uniform([self._vocab_size, self._embedding_size], -1.0, 1.0),
@@ -305,10 +332,9 @@ class CharLSTM(object):
                 nodes['b_s'] = tf.Variable(tf.random_normal([self._vocab_size]), name='bias')
 
                 # use the subset of W/b that correspond to target vocabulary
-                target_vocabs = tf.constant([id_ for id_ in self._target_vocab_ids], dtype=tf.int32)
                 W_s = tf.transpose(
-                    tf.gather(tf.transpose(nodes['W_s'], [1, 0]), target_vocabs), [1, 0])
-                b_s = tf.gather(nodes['b_s'], target_vocabs)
+                    tf.gather(tf.transpose(nodes['W_s'], [1, 0]), target_vocab_ids), [1, 0])
+                b_s = tf.gather(nodes['b_s'], target_vocab_ids)
                 logits = tf.matmul(rnn_outputs, W_s) + b_s
 
                 # reshape the logits back to batch_size * seq_lens * vocab_size such that we can
@@ -317,7 +343,7 @@ class CharLSTM(object):
 
                 # convert back to original vocab_ids, add 0. probability for the other vocabs
                 nodes['Y_prob'] = tf.transpose(tf.scatter_nd(
-                    indices=tf.expand_dims(target_vocabs, axis=1),
+                    indices=tf.expand_dims(target_vocab_ids, axis=1),
                     updates=tf.transpose(tf.nn.softmax(logits), [2, 0, 1]),
                     shape=[self._vocab_size, batch_size, max_seq_len]), [1, 2, 0])
                 nodes['Y_pred'] = tf.argmax(nodes['Y_prob'], axis=2)
@@ -327,9 +353,6 @@ class CharLSTM(object):
                 weights = tf.cast(tf.sequence_mask(nodes['seq_lens'], max_seq_len), tf.float32)
 
                 # convert from original vocab_id to target_vocab_id in order to compute loss
-                orig_id2target_id = tf.constant(
-                    [self._target_vocab_ids.index(id_) if id_ in self._target_vocab_ids else 0
-                     for id_ in range(self._vocab_size)], dtype=tf.int32)
                 target_Y = tf.nn.embedding_lookup(orig_id2target_id, nodes['Y'])
 
                 nodes['loss'] = sequence_loss(logits=logits, targets=target_Y, weights=weights)
@@ -356,6 +379,14 @@ class CharLSTM(object):
 
             # save the model to checkpoint
             nodes['saver'] = tf.train.Saver()
+
+            # save without target_vocab_ids and orig_id2target_id (temporally solution in order to
+            # restore from a checkpoint that doesn't have target_vocab_ids saved)
+            variables_to_save = {regex.sub(r':\d', '', variable.name): variable
+                                 for variable in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+                                 if variable not in [target_vocab_ids, orig_id2target_id]}
+
+            nodes['saver_without_target_vocab_ids'] = tf.train.Saver(variables_to_save)
 
         self._graph = graph
         self._nodes = nodes
