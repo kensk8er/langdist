@@ -56,6 +56,7 @@ class CharLSTM(object):
         self._sentence_border = encoder.sentence_border if encoder else None
         self._sentence_border_id = encoder.sentence_border_id if encoder else None
         self._session = None
+        self._target_vocab_ids = None
 
     def train(self, sentences, model_path, batch_size=128, patience=819200, stat_interval=25,
               valid_intervals=None, summary_interval=50, valid_size=0.1, valid_batch_num=10,
@@ -217,16 +218,11 @@ class CharLSTM(object):
         instance._session = tf.Session(graph=instance._graph)
         instance._session.run(instance._nodes['init'])
 
-        if hasattr(instance, '_target_vocab_ids'):
-            # this is in order to cope with older code that uses self._target_vocab_ids
-            # TODO: this if clause needs to be removed once we stop using old models
-            instance._set_target_vocabs(
-                [instance._target_vocab_ids], instance._session, instance._nodes)
-            instance._nodes['saver_without_target_vocab_ids'].restore(
-                instance._session, os.path.join(model_path, instance._checkpoint_file_name))
-        else:
-            instance._nodes['saver'].restore(
-                instance._session, os.path.join(model_path, instance._checkpoint_file_name))
+        # this is in order to cope with older code that uses self._target_vocab_ids
+        instance._set_target_vocabs(
+            [instance._target_vocab_ids], instance._session, instance._nodes)
+        instance._nodes['saver_without_target_vocab_ids'].restore(
+            instance._session, os.path.join(model_path, instance._checkpoint_file_name))
 
         # initialize only variables relating to optimizer again such that we can retrain a model
         instance._session.run(instance._nodes['init_optimizer'])
@@ -294,14 +290,15 @@ class CharLSTM(object):
                     [LSTMStateTuple(initial_states[layer_id][0], initial_states[layer_id][1])
                      for layer_id in range(self._num_rnn_layers)])
 
-                target_vocab_ids = tf.Variable(
-                    [], dtype=tf.int32, trainable=False, validate_shape=False)
-                nodes['target_vocab_ids'] = tf.placeholder(tf.int32, name='target_vocab_ids')
+                target_vocab_ids = tf.Variable([], dtype=tf.int32, trainable=False,
+                                               validate_shape=False, name='target_vocab_ids')
+                nodes['target_vocab_ids'] = tf.placeholder(tf.int32, name='target_vocab_ids_')
                 nodes['assign_target_vocab_ids'] = tf.assign(
                     target_vocab_ids, nodes['target_vocab_ids'], validate_shape=False)
 
-                orig_id2target_id = tf.Variable([], dtype=tf.int32, trainable=False)
-                nodes['orig_id2target_id'] = tf.placeholder(tf.int32, name='orig_id2target_id')
+                orig_id2target_id = tf.Variable([], dtype=tf.int32, trainable=False,
+                                                name='orig_id2target_id')
+                nodes['orig_id2target_id'] = tf.placeholder(tf.int32, name='orig_id2target_id_')
                 nodes['assign_orig_id2target_id'] = tf.assign(
                     orig_id2target_id, nodes['orig_id2target_id'], validate_shape=False)
 
