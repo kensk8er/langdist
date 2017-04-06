@@ -104,6 +104,9 @@ class ChineseTransliterator(BaseTransliterator):
             for symbol in symbols:
                 text = text.replace(' {}'.format(symbol), symbol)
 
+        # TODO: this is a quick fix for the issue that polyglot_encoder doesn't have capital X
+        text = text.replace('X', 'x')  # don't use capitalized X until fixing the issue...
+
         return text
 
 
