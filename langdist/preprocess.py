@@ -75,7 +75,7 @@ def preprocess_corpora():
     Preprocess all the corpora and store them into pickle files.
     """
     for locale in LOCALES:
-        if locale in NON_ALPHABET_LOCALES:
+        if locale.endswith(TRANSLITERATION_CODE):
             continue
         preprocess_corpus(locale)
 
