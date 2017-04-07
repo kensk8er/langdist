@@ -201,6 +201,8 @@ class CharLSTM(object):
         session.run(nodes['assign_orig_id2target_id'],
                     feed_dict={nodes['orig_id2target_id']: orig_id2target_id})
 
+        self._target_vocab_ids = target_vocab_ids
+
     @classmethod
     def load(cls, model_path):
         """
