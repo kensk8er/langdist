@@ -4,6 +4,8 @@ langdict package
 """
 import os
 
-__author__ = 'kensuke@complyadvantage.com'
+from langdist._version import __version__
+
+__author__ = 'kensk8er1017@gmail.com'
 
 PACKAGE_ROOT = os.path.dirname(os.path.realpath(__file__))
