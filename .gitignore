@@ -87,3 +87,17 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# Pycharm
+.idea
+
+# Mac
+.DS_Store
+
+# Project sepecic
+corpora/*.xml
+corpora/*.pkl
+models
+profile_train.json
+profile_valid.json
+
