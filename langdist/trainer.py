@@ -7,6 +7,10 @@ Usage:
     trainer.py retrain <old-locale> <new-locale> [options]
     trainer.py -h | --help
 
+Commands:
+    train  Train a language model from the scratch (monolingual model)
+    retrain  Train a language model from another language model (bilingual model)
+
 Options:
     -h --help  Show this screen.
     --patience=<int>  The number of iterations to keep training
