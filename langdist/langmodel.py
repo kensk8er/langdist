@@ -53,15 +53,15 @@ class CharLSTM(object):
         self._vocab_size = encoder.vocab_size if encoder else None
         self._encoder = encoder if encoder else CharEncoder()
         self._num_params = None
-        self._sentence_border = encoder.sentence_border if encoder else None
-        self._sentence_border_id = encoder.sentence_border_id if encoder else None
+        self._segment_char = encoder.segment_char if encoder else None
+        self._segment_char_id = encoder.segment_char_id if encoder else None
         self._session = None
         self._target_vocab_ids = None
 
-    def train(self, sentences, model_path, batch_size=128, patience=819200, stat_interval=25,
+    def train(self, samples, model_path, batch_size=128, patience=819200, stat_interval=25,
               valid_intervals=None, summary_interval=50, valid_size=0.1, valid_batch_num=10,
               profile=False):
-        """Train a language model on the sentences of word IDs."""
+        """Train a language model on the samples of word IDs."""
 
         def add_metric_summary(summary_writer, mode, iteration, perplexity):
             """Add summary for metric."""
@@ -109,8 +109,8 @@ class CharLSTM(object):
             valid_intervals = [2 ** i for i in range(9)]
 
         retrain = True if self._session else False
-        fit_encoder = False if self._encoder.is_fit() else True
-        X = self._encode_chars(sentences, fit=fit_encoder)
+        fit_encoder = False if self._encoder.is_fit else True
+        X = self._encode_chars(samples, fit=fit_encoder)
         X_train, X_valid = train_test_split(
             X, random_state=self._random_state, test_size=valid_size)
 
@@ -147,7 +147,7 @@ class CharLSTM(object):
             if batch_id % valid_interval == 0:
                 best_perplexity = validate(
                     X_valid, Y_valid, seq_lens_valid, batch_id, best_perplexity, summary_writer)
-                self._sample(session)
+                self._generate(session)
                 valid_interval = valid_intervals.pop(0) if valid_intervals else valid_interval
 
             if batch_id % summary_interval == 0:
@@ -189,9 +189,9 @@ class CharLSTM(object):
         session.close()
 
     def _set_target_vocabs(self, X, session, nodes):
-        """Set target vocabulary IDs from word IDs of sentences."""
+        """Set target vocabulary IDs from word IDs of samples."""
         target_vocab_ids = set(chain.from_iterable(X))
-        target_vocab_ids.add(self._sentence_border_id)
+        target_vocab_ids.add(self._segment_char_id)
         target_vocab_ids = list(target_vocab_ids)
         session.run(nodes['assign_target_vocab_ids'],
                     feed_dict={nodes['target_vocab_ids']: target_vocab_ids})
@@ -231,9 +231,9 @@ class CharLSTM(object):
 
         return instance
 
-    def sample(self, sample_num=10, prompts=None, pick_top_k=10, max_char_len=300, log=False):
-        """Sample sentences using a trained model running on the given session."""
-        return self._sample(self._session, sample_num, prompts, pick_top_k, max_char_len, log)
+    def generate(self, sample_num=10, prompts=None, pick_top_k=10, max_char_len=300, log=False):
+        """Generate samples of characters using a trained model running on the given session."""
+        return self._generate(self._session, sample_num, prompts, pick_top_k, max_char_len, log)
 
     def _save(self, model_path, session):
         """Save the tensorflow session and the instance object of this Python class."""
@@ -418,38 +418,38 @@ class CharLSTM(object):
     def _create_Y(self, X):
         """
         Create Y (correct character sequences) based on X (input character sequences). Also prepend
-        the sentence border character to X (in order to learn the beginning of a sentences).
+        the segment character to X (in order to learn the beginning of a sample).
         """
         Y = list()
         for x in X:
             y = copy(x)
-            y.append(self._sentence_border_id)
+            y.append(self._segment_char_id)
             Y.append(y)
-            x.insert(0, self._sentence_border_id)
+            x.insert(0, self._segment_char_id)
             assert len(x) == len(y), 'len(x) != len(y)'
         return X, Y
 
-    def _encode_chars(self, sentences, fit):
-        """Convert sentences of characters into encoded characters (character IDs)."""
+    def _encode_chars(self, samples, fit):
+        """Convert samples of characters into encoded characters (character IDs)."""
         if fit:
-            encoded_sentences = self._encoder.fit_encode(sentences)
+            encoded_samples = self._encoder.fit_encode(samples)
             self._vocab_size = self._encoder.vocab_size
-            self._sentence_border = self._encoder.sentence_border
-            self._sentence_border_id = self._encoder.sentence_border_id
+            self._segment_char = self._encoder.segment_char
+            self._segment_char_id = self._encoder.segment_char_id
         else:
-            encoded_sentences = self._encoder.encode(sentences)
-        return encoded_sentences
+            encoded_samples = self._encoder.encode(samples)
+        return encoded_samples
 
-    def _decode_chars(self, sentences):
-        """Convert sentences of encoded character IDs into decoded characters."""
-        return self._encoder.decode(sentences)
+    def _decode_chars(self, samples):
+        """Convert samples of encoded character IDs into decoded characters."""
+        return self._encoder.decode(samples)
 
-    def _sample(self, session, sample_num=10, prompts=None, pick_top_k=10, max_char_len=300,
-                log=True):
-        """Sample sentences using a trained model running on the given session."""
+    def _generate(self, session, sample_num=10, prompts=None, pick_top_k=10, max_char_len=300,
+                  log=True):
+        """Generate samples of characters using a trained model running on the given session."""
 
-        def sample_chars_from_probs(Y_prob):
-            """Sample a character for each sentences based on the predicted probabilities."""
+        def generate_chars_from_probs(Y_prob):
+            """Generate a character for each sample based on the predicted probabilities."""
             Y_prob = np.squeeze(Y_prob, axis=1)
             chars = list()
             for y_prob in Y_prob:
@@ -459,52 +459,52 @@ class CharLSTM(object):
                 chars.append(np.random.choice(self._vocab_size, 1, p=y_prob)[0])
             return chars
 
-        sentences = [[self._sentence_border_id] for _ in range(sample_num)]
+        samples = [[self._segment_char_id] for _ in range(sample_num)]
         if prompts:
             assert sample_num == len(prompts), 'sample_num != len(prompts)'
-            for sentence_id, prompt in enumerate(prompts):
-                sentences[sentence_id].append(self._encode_chars([prompt], fit=False)[0])
+            for sample_id, prompt in enumerate(prompts):
+                samples[sample_id].append(self._encode_chars([prompt], fit=False)[0])
 
-        X, seq_lens = self._add_padding(sentences)
-        sentence_ids = list(range(sample_num))  # IDs of sentences to still sample
+        X, seq_lens = self._add_padding(samples)
+        sample_ids = list(range(sample_num))  # IDs of samples to still generate
         nodes = self._nodes
         initial_states = np.zeros((self._num_rnn_layers, 2, sample_num, self._rnn_size))
 
-        while len(max(sentences, key=len)) < max_char_len:
+        while len(max(samples, key=len)) < max_char_len:
             Y_prob, states = session.run(
                 [nodes['Y_prob'], nodes['states']],
                 feed_dict={nodes['X']: X, nodes['seq_lens']: seq_lens, nodes['is_train']: False,
                            nodes['initial_states']: initial_states})
-            sampled_char_ids = sample_chars_from_probs(Y_prob)
+            sampled_char_ids = generate_chars_from_probs(Y_prob)
             next_sample_ids = list()
 
-            for sample_id, sentence_id in enumerate(sentence_ids):
-                sampled_char_id = sampled_char_ids[sample_id]
+            for sequence_id, sample_id in enumerate(sample_ids):
+                sampled_char_id = sampled_char_ids[sequence_id]
 
-                # don't process sentences that already finish sampling
-                if sampled_char_id == self._sentence_border_id:
+                # don't process samples that already finish generating
+                if sampled_char_id == self._segment_char_id:
                     continue
 
-                sentences[sentence_id].append(sampled_char_id)
-                next_sample_ids.append(sample_id)
+                samples[sample_id].append(sampled_char_id)
+                next_sample_ids.append(sequence_id)
 
-            # finish the loop when there's no more sentence to sample
+            # finish the loop when there's nothing to generate
             if not next_sample_ids:
                 break
 
             # prepare next input
-            # don't process sentences that already finish sampling
-            sentence_ids = [sentence_ids[sample_id] for sample_id in next_sample_ids]
+            # don't process samples that already finish sampling
+            sample_ids = [sample_ids[sample_id] for sample_id in next_sample_ids]
             initial_states = np.array(states)[:, :, np.array(next_sample_ids)]
             X = list()
-            for sentence_id in sentence_ids:
-                X.append([sentences[sentence_id][-1]])
+            for sample_id in sample_ids:
+                X.append([samples[sample_id][-1]])
             X, seq_lens = self._add_padding(X)
 
-        sentences = self._decode_chars(sentences)
-        sentences = [sentence.strip() for sentence in sentences]
+        samples = self._decode_chars(samples)
+        samples = [sample.strip() for sample in samples]
 
         if log:
-            _LOGGER.info('Sampled sentences: \n{}'.format('\n'.join(sentences)))
+            _LOGGER.info('Generated Samples: \n{}'.format('\n'.join(samples)))
 
-        return sentences
+        return samples
