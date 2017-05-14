@@ -21,9 +21,9 @@ from langdist.batch import BatchGenerator
 from langdist.encoder import CharEncoder
 from langdist.util import get_logger
 
-__author__ = 'kensk8er1017@gmail.com'
+_LOGGER = get_logger(__name__)
 
-_LOGGER = get_logger(__name__, filename='{}.log'.format(__name__))
+__author__ = 'kensk8er1017@gmail.com'
 
 
 class CharLSTM(object):
