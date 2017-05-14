@@ -7,8 +7,6 @@ import os
 from logging import getLogger
 from xml.dom import minidom
 
-from langdist.constant import CORPUS_DIR
-
 _LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 _DEFAULT_LOG_PATH = None  # don't write to a file in default
 _DEFAULT_LOG_LEVEL = logging.INFO
@@ -18,15 +16,27 @@ __author__ = 'kensk8er1017@gmail.com'
 
 class CorpusParser(object):
     """Parser for the parallel multilingual bible corpora (http://christos-c.com/bible/)."""
+    _language_tag = 'language'
+    _id_attribute = 'id'
+    _segment_tag = 'seg'
 
-    def __init__(self, locale):
-        self._locale = locale
-        self._corpus_path = os.path.join(CORPUS_DIR, '{}.xml'.format(locale))
+    def __init__(self, corpus_path):
+        self._lang_code = None
+        self._corpus_path = corpus_path
+
+    @property
+    def lang_code(self):
+        """Return the language code of the corpus."""
+        if not self._lang_code:
+            xmldoc = minidom.parse(self._corpus_path)
+            self._lang_code = xmldoc.getElementsByTagName(
+                self._language_tag)[0].attributes[self._id_attribute].value
+        return self._lang_code
 
     def gen_paragraphs(self):
         """Yield paragraph of the corpus."""
         xmldoc = minidom.parse(self._corpus_path)
-        segments = xmldoc.getElementsByTagName('seg')
+        segments = xmldoc.getElementsByTagName(self._segment_tag)
         for segment in segments:
             if segment.childNodes:
                 yield segment.childNodes[0].nodeValue

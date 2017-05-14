@@ -43,31 +43,31 @@ def _preprocess(paragraph, locale):
     return (sentence.strip() for sentence in _sent_tokenize(paragraph, locale))
 
 
-def preprocess_corpus(locale):
+def preprocess_corpus(xml_corpus_path, processed_corpus_path, transliterate=False):
     """
-    Preprocess the corpus of the specified locale and store it into a pickle file.
+    Preprocess the raw xml corpus that was downloaded from Multilingual Bible Parallel Corpus
+    (http://christos-c.com/bible/) and save it to a .pkl file.
 
-    :param locale: locale of the corpus to preprocess
+    :param xml_corpus_path: locale of the corpus to preprocess
+    :param processed_corpus_path: path to the .pkl file that you save the preprocessed corpus to
+    :param transliterate: If True, transliterate the corpus text into latin alphabets.
     """
     corpus = list()
-    parser = CorpusParser(locale)
+    parser = CorpusParser(xml_corpus_path)
+    lang_code = parser.lang_code
+
     for paragraph in parser.gen_paragraphs():
-        sentences = _preprocess(paragraph, locale)
+        sentences = _preprocess(paragraph, lang_code)
         for sentence in sentences:
             if sentence and len(sentence) < _MAX_SENTENCE_LEN:
                 corpus.append(sentence)
 
-    processed_filepath = os.path.join(CORPUS_DIR, '{}.pkl'.format(locale))
-    with open(processed_filepath, 'wb') as processed_file:
-        pickle.dump(corpus, processed_file)
+    if transliterate:
+        transliterator = get_transliterator(lang_code)
+        corpus = transliterator.transliterate_corpus(corpus)
 
-    if locale in NON_ALPHABET_LOCALES:
-        transliterator = get_transliterator(locale)
-        transliterated_corpus = transliterator.transliterate_corpus(corpus)
-        transliterated_filepath = os.path.join(
-            CORPUS_DIR, '{}-{}.pkl'.format(locale, TRANSLITERATION_CODE))
-        with open(transliterated_filepath, 'wb') as processed_file:
-            pickle.dump(transliterated_corpus, processed_file)
+    with open(processed_corpus_path, 'wb') as processed_file:
+        pickle.dump(corpus, processed_file)
 
 
 def preprocess_corpora():
