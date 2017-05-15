@@ -117,7 +117,7 @@ def main():
         set_default_log_path(log_path)
         set_log_path(_LOGGER, log_path)
 
-    _LOGGER.info('Configuration:\n{}'.format(args))
+    _LOGGER.debug('Configuration:\n{}'.format(args))
 
     if args['preprocess']:
         preprocess(args['<input-corpus-path>'], args['<output-corpus-path>'])
@@ -130,6 +130,7 @@ def main():
 
     if args['fit-encoder']:
         fit_encoder(args['<input-corpus-path>'], args['<encoder-path>'])
+        return
 
     # set arguments for training
     with open(args['<input-corpus-path>'], 'rb') as input_corpus_file:
