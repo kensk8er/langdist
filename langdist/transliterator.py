@@ -22,10 +22,10 @@ class BaseTransliterator(metaclass=ABCMeta):
         """
         Transliterate a non-alphabetic corpus into Latin alphabets.
 
-        :param corpus: list of sentences in original scripts
+        :param corpus: samples of characters in original scripts
         :return: transliterated corpus
         """
-        return [self.transliterate(sentence) for sentence in corpus]
+        return [self.transliterate(sample) for sample in corpus]
 
 
 class JapaneseTransliterator(BaseTransliterator):
@@ -104,9 +104,6 @@ class ChineseTransliterator(BaseTransliterator):
             for symbol in symbols:
                 text = text.replace(' {}'.format(symbol), symbol)
 
-        # TODO: this is a quick fix for the issue that polyglot_encoder doesn't have capital X
-        text = text.replace('X', 'x')  # don't use capitalized X until fixing the issue...
-
         return text
 
 
@@ -137,14 +134,14 @@ class ArabicTransliterator(BaseTransliterator):
         return text
 
 
-def get_transliterator(locale, **kwargs):
+def get_transliterator(lang_code, **kwargs):
     """Return transliterator for given locale."""
-    locale2transliterator_class = {
+    lang_code2transliterator_class = {
         'ja': JapaneseTransliterator,
         'zh': ChineseTransliterator,
         'ar': ArabicTransliterator,
     }
-    if locale not in locale2transliterator_class:
-        raise NotImplementedError('Transliterator for locale={} is not implemented.')
+    if lang_code not in lang_code2transliterator_class:
+        raise NotImplementedError('Transliterator for lang_code={} is not implemented.')
     else:
-        return locale2transliterator_class[locale](**kwargs)
+        return lang_code2transliterator_class[lang_code](**kwargs)
