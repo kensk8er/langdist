@@ -48,6 +48,8 @@ setup(
     url='https://github.com/kensk8er/langdist',
     author='Kensuke Muraki',
     author_email='kensk8er1017@gmail.com',
+    maintainer='Kensuke Muraki',
+    maintainer_email='kensk8er1017@gmail.com',
     classifiers=[
         # How mature is this project? Common values are
         #   3 - Alpha
@@ -67,5 +69,6 @@ setup(
     packages=[PACKAGE_NAME],
     install_requires=install_requires,
     zip_safe=False,
-    entry_points={'console_scripts': ['{0}={0}.cli:main'.format(PACKAGE_NAME)]}
+    entry_points={'console_scripts': ['{0}={0}.cli:main'.format(PACKAGE_NAME)]},
+    keywords='language-model natural-language-processing natural-language-generation machine-learning tensorflow deep-learning recurrent-neural-networks lstm multilingual nlp python neural-network character-embeddings data-science',
 )
