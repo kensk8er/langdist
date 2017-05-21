@@ -70,5 +70,7 @@ setup(
     install_requires=install_requires,
     zip_safe=False,
     entry_points={'console_scripts': ['{0}={0}.cli:main'.format(PACKAGE_NAME)]},
-    keywords='language-model natural-language-processing natural-language-generation machine-learning tensorflow deep-learning recurrent-neural-networks lstm multilingual nlp python neural-network character-embeddings data-science',
+    keywords='language-model natural-language-processing natural-language-generation '
+             'machine-learning tensorflow deep-learning recurrent-neural-networks lstm '
+             'multilingual nlp python neural-network character-embeddings data-science',
 )
