@@ -1,6 +1,6 @@
 # -*- coding: UTF-8 -*-
 """
-Command Line Interface of langdist package.
+Command Line Interface (CLI) of langdist package.
 
 Usage:
     langdist preprocess <input-corpus-path> <output-corpus-path>
@@ -44,14 +44,12 @@ Examples:
 """
 import os
 import shutil
-
 import logging
-
 import pickle
+
 from docopt import docopt
 
-from langdist import __version__, encoder
-from langdist.langmodel import CharLSTM
+from langdist import __version__
 from langdist.transliterator import get_transliterator
 from langdist.util import get_logger, set_default_log_path, set_default_log_level, set_log_level, \
     set_log_path
@@ -87,11 +85,13 @@ def fit_encoder(input_corpus_paths, encoder_path):
     """
     Fit an encoder on the corpora given and save it into a pickle file.
     """
+    from langdist import encoder  # import locally because it's slow to import
     encoder.fit_encoder(input_corpus_paths, encoder_path)
 
 
 def train(train_args, encoder_path):
     """Train a language model."""
+    from langdist.langmodel import CharLSTM  # import locally because it's slow to import
     with open(encoder_path, 'rb') as encoder_file:
         encoder = pickle.load(encoder_file)
     char_lstm = CharLSTM(encoder=encoder)
@@ -100,6 +100,7 @@ def train(train_args, encoder_path):
 
 def retrain(old_model_path, train_args):
     """Train a language model on top of the given language model."""
+    from langdist.langmodel import CharLSTM  # import locally because it's slow to import
     char_lstm = CharLSTM.load(old_model_path)
     char_lstm.train(**train_args)
 
