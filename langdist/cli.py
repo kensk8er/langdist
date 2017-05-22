@@ -134,7 +134,7 @@ def _get_init_args(args):
     return {'embedding_size': int(args['--embed-size']), 'rnn_size': int(args['--rnn-size']),
             'num_rnn_layers': int(args['--num-layers']),
             'learning_rate': float(args['--learning-rate']),
-            'rnn_dropouts': [float(dropout) for dropout in args['--rnn_dropouts'].split(',')],
+            'rnn_dropouts': [float(dropout) for dropout in args['--rnn-dropouts'].split(',')],
             'final_dropout': float(args['--final-dropout']), 'encoder': encoder}
 
 
