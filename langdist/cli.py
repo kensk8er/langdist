@@ -5,7 +5,7 @@ Command Line Interface (CLI) of langdist package.
 Usage:
     langdist download-bible <lang-code> <output-corpus-path>
     langdist transliterate <input-corpus-path> <lang-code> <output-corpus-path>
-    langdist fit-encoder <encoder-path> <input-corpus-path>...
+    langdist fit-encoder <encoder-path> <input-corpus-paths>...
     langdist train <input-corpus-path> <encoder-path> <model-path> [options]
     langdist retrain <old-model-path> <input-corpus-path> <model-path> [options]
     langdist -h | --help
@@ -172,7 +172,7 @@ def main():
         return
 
     if args['fit-encoder']:
-        fit_encoder(args['<input-corpus-path>'], args['<encoder-path>'])
+        fit_encoder(args['<input-corpus-paths>'], args['<encoder-path>'])
         return
 
     # set arguments for __init__() and train()
