@@ -214,7 +214,6 @@ def main():
         return
 
     # set arguments for __init__() and train()
-    init_args = _get_init_args(args)
     train_args = _get_train_args(args)
 
     # remove the model file if already exists
@@ -222,6 +221,7 @@ def main():
         shutil.rmtree(train_args['model_path'])
 
     if args['train']:
+        init_args = _get_init_args(args)
         train(init_args, train_args)
     elif args['retrain']:
         retrain(args['<old-model-path>'], train_args)
