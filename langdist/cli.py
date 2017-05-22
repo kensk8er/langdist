@@ -29,7 +29,15 @@ Arguments:
 Options:
     -h --help  Show this screen
     -v --version  Show version
+    --embed-size=<int>  The number of dimensions of the character embedding layer [default: 128] 
+    --rnn-size=<int>  The number of dimensions of the RNN layers [default: 256]
+    --num-layers=<int>  The number of RNN layers [default: 2]
+    --learning-rate=<float>  Initial learning rate of SGD (Adam Optimizer) [default: 0.001]
+    --rnn-dropouts=<floats>  Keep probability of dropout in each RNN layer [default: 1.0,1.0]
+    --final-dropout=<float>  Keep probability of dropout in the final fully connected layer [default: 1.0]
+    --batch-size=<int>  The number of samples per batch [default: 128] 
     --patience=<int>  The number of iterations to keep training [default: 819200]
+    --valid-size=<float>  The proportion of dataset to use for validation [default: 0.1] 
     --profile  Profile the training (profile_train/valid.json will be created)
     --log-path=<str>  If specified, log into the file at the path [default: ]
     --verbose  Show debug messages
@@ -105,12 +113,10 @@ def fit_encoder(input_corpus_paths, encoder_path):
     encoder.fit_encoder(input_corpus_paths, encoder_path)
 
 
-def train(train_args, encoder_path):
+def train(init_args, train_args):
     """Train a language model."""
     from langdist.langmodel import CharLSTM  # import locally because it's slow to import
-    with open(encoder_path, 'rb') as encoder_file:
-        encoder = pickle.load(encoder_file)
-    char_lstm = CharLSTM(encoder=encoder)
+    char_lstm = CharLSTM(**init_args)
     char_lstm.train(**train_args)
 
 
@@ -119,6 +125,26 @@ def retrain(old_model_path, train_args):
     from langdist.langmodel import CharLSTM  # import locally because it's slow to import
     char_lstm = CharLSTM.load(old_model_path)
     char_lstm.train(**train_args)
+
+
+def _get_init_args(args):
+    """Construct argument dict for CharLSTM.__init__() from args and return it."""
+    with open(args['<encoder-path>'], 'rb') as encoder_file:
+        encoder = pickle.load(encoder_file)
+    return {'embedding_size': int(args['--embed-size']), 'rnn_size': int(args['--rnn-size']),
+            'num_rnn_layers': int(args['--num-layers']),
+            'learning_rate': float(args['--learning-rate']),
+            'rnn_dropouts': [float(dropout) for dropout in args['--rnn_dropouts'].split(',')],
+            'final_dropout': float(args['--final-dropout']), 'encoder': encoder}
+
+
+def _get_train_args(args):
+    """Construct argument dict for CharLSTM.train() from args and return it."""
+    with open(args['<input-corpus-path>'], 'rb') as input_corpus_file:
+        samples = pickle.load(input_corpus_file)
+    return {'samples': samples, 'model_path': args['<model-path>'],
+            'batch_size': int(args['--batch-size']), 'patience': int(args['--patience']),
+            'valid_size': float(args['--valid-size']), 'profile': args['--profile']}
 
 
 def main():
@@ -149,20 +175,16 @@ def main():
         fit_encoder(args['<input-corpus-path>'], args['<encoder-path>'])
         return
 
-    # set arguments for training
-    with open(args['<input-corpus-path>'], 'rb') as input_corpus_file:
-        samples = pickle.load(input_corpus_file)
-    train_args = {'samples': samples, 'profile': args['--profile'],
-                  'model_path': args['<model-path>']}
-    if args['--patience']:
-        train_args['patience'] = int(args['--patience'])
+    # set arguments for __init__() and train()
+    init_args = _get_init_args(args)
+    train_args = _get_init_args(args)
 
     # remove the model file if already exists
     if os.path.exists(train_args['model_path']):
         shutil.rmtree(train_args['model_path'])
 
     if args['train']:
-        train(train_args, args['<encoder-path>'])
+        train(init_args, train_args)
     elif args['retrain']:
         retrain(args['<old-model-path>'], train_args)
 
