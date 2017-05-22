@@ -177,7 +177,7 @@ def main():
 
     # set arguments for __init__() and train()
     init_args = _get_init_args(args)
-    train_args = _get_init_args(args)
+    train_args = _get_train_args(args)
 
     # remove the model file if already exists
     if os.path.exists(train_args['model_path']):
