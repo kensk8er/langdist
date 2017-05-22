@@ -11,7 +11,7 @@ Features
   - This is a language model trained in one language
 - Train a *bilingual language model*
   - This is a language model that is trained on top of another language model (the parameters are initialized using another language model's parameters)
-- Sample sentences using a pre-trained language model
+- Generate texts using a trained language model
 
 
 Installation
@@ -47,7 +47,7 @@ Note that `en` here is the language code of English. Specifying an invalid langu
 
 You need to fit an encoder to the character used in corpora before you train a language model on them. Note that the same encoder will be used when you train a new language model on top of another language model (*multilingual language model*). Therefore, you need to fit an encoder to all the corpora you will train multilingual language models on.
 
-The following command will fit an encoder to English, French, and Japanese corpora and save it to `./en_fr_ja_encoder.pkl`.
+The following command will fit an encoder to English, French, and Japanese corpora and save it to `./en_fr_ja_encoder.pkl`:
 
 ```langdist fit-encoder en_fr_ja_encoder.pkl en_corpus.pkl fr_corpus.pkl ja_corpus.pkl```
 
@@ -55,28 +55,41 @@ Note that `xx_corpus.pkl` is a pickle file of a corpus, which can be generated b
 
 ### 3. Train a language model from the scratch (*monolingual language model*)
 
-The following command will train a French language model and save it to `./fr_model` directory.
+The following command will train a French language model and save it to `./fr_model` directory:
 
 ```langdist train fr_corpus.pkl en_fr_ja_encoder.pkl fr_model --patience=819200 --logpath=fr.log```
 
 Note that using an encoder that was not fit to the corpus will throw an exception. `--patience` option specifies how many iterations you want to keep training and `--logpath` option specifies the path to the log file that records the progress of the training (no log file will be created if you don't specify the option).
 
-During the training, various stats are dumped to `path_to_model_dir/tensorboard.log` directory. You can visualize them using `tensorboard` by `tensorboard --logdir=path_to_model_dir/tensorboard.log`.
+During the training, various stats are dumped to `path_to_model_dir/tensorboard.log` directory. You can visualize them using `tensorboard` by `tensorboard --logdir=path_to_model_dir/tensorboard.log`. The model is saved every time after computing validation perplexity and is available to use before finishing the training.
 
 Check the output of `langdist --help` to know what other options are available for training a language model.
 
 ### 4. Train a new language model on of another language model (*multilingual language model*)
 
-The following command will train an English language model on top of the French language model we have trained and save it to `fr2en_model` directory.
+The following command will train an English language model on top of the French language model we have trained and save it to `fr2en_model` directory:
 
 ```langdist retrain fr_model en_corpus.pkl fr2en_model --patience=819200 --logpath=langdist.log```
 
 Note that you don't have to specify the path to an encoder because the model in `fr_model` includes it. If the encoder that was used when training `fr_model` was not fit to characters in `en_corpus.pkl`, it will throw an exception.
 
-During the training, various stats are dumped to `path_to_model_dir/tensorboard.log` directory. You can visualize them using `tensorboard` by `tensorboard --logdir=path_to_model_dir/tensorboard.log`.
+During the training, various stats are dumped to `path_to_model_dir/tensorboard.log` directory. You can visualize them using `tensorboard` by `tensorboard --logdir=path_to_model_dir/tensorboard.log`. The model is saved every time after computing validation perplexity and is available to use before finishing the training.
 
 Check the output of `langdist --help` to know what other options are available for training a language model.
 
 ### 5. Generate texts using a trained language model
+
+Once you have trained a language model, the following command will generate texts using the trained language model:
+
+```langdist generate fr2en_model --sample-num=50```
+
+`--sample-num` option decides the number of texts to generate. Note that each text is independently generated (sampled) by the language model.
+
+Check the output of `langdist --help` to know what other options are available for training a language model.
+
+
+### Use `langdist` from Python
+
+`langdist` can be used as a normal python package by importing `langdist` package, which is installed to your Python environment by `pip install langdist`. Reading `langdist/cli.py` is a good way to figure out how to use the package.
 
 TODO: Add a link to the blog post *Bilingual Character-level Neural Language Modeling*
