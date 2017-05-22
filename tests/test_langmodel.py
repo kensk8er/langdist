@@ -19,12 +19,13 @@ class LangmodelTest(unittest.TestCase):
     def test_train(self):
         corpus_path = os.path.join(_TEST_ROOT, 'corpora/en.pkl')
         model_path = os.path.join(_TEST_ROOT, 'en')
-        encoder_path = os.path.join(_TEST_ROOT, 'encoders/en_fr.pkl')
+        with open(os.path.join(_TEST_ROOT, 'encoders/en_fr.pkl'), 'rb') as encoder_file:
+            init_args = {'encoder': pickle.load(encoder_file)}
         try:
             with open(corpus_path, 'rb') as corpus_file:
                 samples = pickle.load(corpus_file)
             train_args = {'samples': samples, 'model_path': model_path, 'patience': 255}
-            train(train_args, encoder_path)
+            train(init_args, train_args)
         finally:
             if os.path.exists(model_path):
                 shutil.rmtree(model_path)
