@@ -211,6 +211,7 @@ class CharLSTM(object):
         :param model_path: path to the model directory you want to load the model from.
         :return: instance of the model
         """
+        _LOGGER.debug('Started loading the model...')
         # load the instance, set _model_path appropriately
         with open(os.path.join(model_path, cls._instance_file_name), 'rb') as model_file:
             instance = pickle.load(model_file)
@@ -229,10 +230,21 @@ class CharLSTM(object):
         # initialize only variables relating to optimizer again such that we can retrain a model
         instance._session.run(instance._nodes['init_optimizer'])
 
+        _LOGGER.debug('Finished loading the model.')
         return instance
 
     def generate(self, sample_num=10, prompts=None, pick_top_k=10, max_char_len=300, log=False):
-        """Generate samples of characters using a trained model running on the given session."""
+        """
+        Generate samples of characters using a trained model running on the given session.
+        
+        :param sample_num: the number of texts to generate
+        :param prompts: the first characters which you generate texts from (if None start from 
+                        empty texts)
+        :param pick_top_k: if given, always sample from top k most probable characters
+        :param max_char_len: the maximum length of characters to generate per text
+        :param log: if True, log generated texts
+        :return: list of generated texts
+        """
         return self._generate(self._session, sample_num, prompts, pick_top_k, max_char_len, log)
 
     def _save(self, model_path, session):
@@ -368,7 +380,7 @@ class CharLSTM(object):
 
             # count the number of parameters
             self._num_params = get_num_params()
-            _LOGGER.info('Total number of parameters = {:,}'.format(self._num_params))
+            _LOGGER.debug('Total number of parameters = {:,}'.format(self._num_params))
 
             # generate summaries
             for variable in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
@@ -459,11 +471,11 @@ class CharLSTM(object):
                 chars.append(np.random.choice(self._vocab_size, 1, p=y_prob)[0])
             return chars
 
-        samples = [[self._segment_char_id] for _ in range(sample_num)]
         if prompts:
             assert sample_num == len(prompts), 'sample_num != len(prompts)'
-            for sample_id, prompt in enumerate(prompts):
-                samples[sample_id].append(self._encode_chars([prompt], fit=False)[0])
+            samples = self._encode_chars(list(prompts), fit=False)
+        else:
+            samples = [[self._segment_char_id] for _ in range(sample_num)]
 
         X, seq_lens = self._add_padding(samples)
         sample_ids = list(range(sample_num))  # IDs of samples to still generate
