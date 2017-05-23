@@ -5,7 +5,7 @@ from codecs import open
 from os import path
 import re
 
-__author__ = 'kensk8er1017@gmail.com'
+__author__ = 'kensk8er'
 
 PACKAGE_NAME = 'langdist'
 

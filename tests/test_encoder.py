@@ -11,7 +11,7 @@ from langdist.encoder import fit_encoder
 
 _TEST_ROOT = os.path.dirname(__file__)
 
-__author__ = 'kensk8er1017@gmail.com'
+__author__ = 'kensk8er'
 
 
 class EncoderTest(unittest.TestCase):

@@ -12,7 +12,7 @@ from langdist.cli import train, retrain
 
 _TEST_ROOT = os.path.dirname(__file__)
 
-__author__ = 'kensk8er1017@gmail.com'
+__author__ = 'kensk8er'
 
 
 class LangmodelTest(unittest.TestCase):

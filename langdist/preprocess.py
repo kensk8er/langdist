@@ -8,7 +8,7 @@ import regex
 
 from langdist.util import CorpusParser
 
-__author__ = 'kensk8er1017@gmail.com'
+__author__ = 'kensk8er'
 
 _SENTENCE_BORDER_REGEX = regex.compile(r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\!|\?)\s')
 _SENTENCE_BORDER_REGEX_ZH = regex.compile(r'\.|\?|\!|。|．|！|？')

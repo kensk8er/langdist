@@ -8,7 +8,7 @@ import jieba
 import pinyin
 import pykakasi
 
-__author__ = 'kensk8er1017@gmail.com'
+__author__ = 'kensk8er'
 
 
 class BaseTransliterator(metaclass=ABCMeta):

@@ -6,7 +6,7 @@ import pickle
 
 from sklearn.preprocessing import LabelEncoder
 
-__author__ = 'kensk8er1017@gmail.com'
+__author__ = 'kensk8er'
 
 
 class CharEncoder(object):

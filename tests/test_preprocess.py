@@ -11,7 +11,7 @@ from langdist.preprocess import preprocess_corpus
 
 _TEST_ROOT = os.path.dirname(__file__)
 
-__author__ = 'kensk8er1017@gmail.com'
+__author__ = 'kensk8er'
 
 
 class PreprocessTest(unittest.TestCase):
