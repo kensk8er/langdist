@@ -11,7 +11,7 @@ _LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 _DEFAULT_LOG_PATH = None  # don't write to a file in default
 _DEFAULT_LOG_LEVEL = logging.INFO
 
-__author__ = 'kensk8er1017@gmail.com'
+__author__ = 'kensk8er'
 
 
 class CorpusParser(object):

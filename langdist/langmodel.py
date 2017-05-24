@@ -23,7 +23,7 @@ from langdist.util import get_logger
 
 _LOGGER = get_logger(__name__)
 
-__author__ = 'kensk8er1017@gmail.com'
+__author__ = 'kensk8er'
 
 
 class CharLSTM(object):

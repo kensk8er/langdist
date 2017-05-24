@@ -5,7 +5,7 @@ Define classes related to batch processing here.
 from copy import deepcopy
 from random import shuffle
 
-__author__ = 'kensk8er1017@gmail.com'
+__author__ = 'kensk8er'
 
 
 class BatchGenerator(object):

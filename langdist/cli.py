@@ -84,7 +84,7 @@ _HOME_DIR = '~/'
 
 _LOGGER = get_logger(__name__)
 
-__author__ = 'kensk8er1017@gmail.com'
+__author__ = 'kensk8er'
 
 
 def download_bible(lang_code, output_corpus_path, keep_xml=False):

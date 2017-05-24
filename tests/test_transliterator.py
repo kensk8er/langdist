@@ -6,7 +6,7 @@ import unittest
 
 from langdist.transliterator import get_transliterator
 
-__author__ = 'kensk8er1017@gmail.com'
+__author__ = 'kensk8er'
 
 
 class TransliteratorTest(unittest.TestCase):

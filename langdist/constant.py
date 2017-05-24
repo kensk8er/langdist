@@ -3,7 +3,7 @@
 Module that defines project-wide constants.
 """
 
-__author__ = 'kensk8er1017@gmail.com'
+__author__ = 'kensk8er'
 
 LANG_CODE2LANGUAGE = {
     'af': 'Afrikaans',
