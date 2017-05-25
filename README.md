@@ -104,4 +104,15 @@ Check the output of `langdist --help` to know what other options are available f
 
 `langdist` can be used as a normal python package by importing `langdist` package, which is installed to your Python environment by `pip install langdist`. Reading `langdist/cli.py` is a good way to figure out how to use the package.
 
+Model Architecture
+------------------
+The language model is implemented using Character-level Multilayer LSTM. The architecture is roughly as follows:
+
+1. Character Embedding Layer
+2. 1st LSTM Layer
+3. 2nd LSTM Layer
+4. Fully Connected Layer
+
+For the details, look at `_build_graph()` method in `langdist/langmodel.py`, which implements the computational graph of the architecture in `tensorflow`.
+
 TODO: Add a link to the blog post *Bilingual Character-level Neural Language Modeling*
